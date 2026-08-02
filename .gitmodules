@@ -1,0 +1,6 @@
+[submodule "crates/openfx-bindings/vendor/openfx"]
+	path = crates/openfx-bindings/vendor/openfx
+	url = https://github.com/AcademySoftwareFoundation/openfx
+[submodule "crates/learning/ntsc-openfx/vendor/ntsc-rs"]
+	path = crates/learning/ntsc-openfx/vendor/ntsc-rs
+	url = https://github.com/ntsc-rs/ntsc-rs

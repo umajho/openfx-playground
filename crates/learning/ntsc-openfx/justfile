@@ -1,0 +1,3 @@
+# just build --release
+build *args:
+    cargo xtask learning-ntsc-openfx-build-plugin {{ args }}

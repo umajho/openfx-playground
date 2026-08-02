@@ -1,0 +1,12 @@
+[package]
+name = "openfx-bindings"
+publish = false
+version = "0.1.7"
+edition = "2021"
+license = "MIT OR ISC OR Apache-2.0"
+
+[build-dependencies]
+bindgen = { workspace = true }
+
+[lints]
+workspace = true
