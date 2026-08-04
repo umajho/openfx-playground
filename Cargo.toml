@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/learning/ntsc-openfx",
   "crates/learning/ofx-guide-1-basic-machinery",
+  "crates/learning/ofx-guide-2-invert",
   "crates/openfx-bindings",
   "xtask",
 ]
