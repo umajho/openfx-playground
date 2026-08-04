@@ -2,7 +2,7 @@
 
 use std::error::Error;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Target {
     /// Cargo target triple for this target
     pub target_triple: &'static str,
