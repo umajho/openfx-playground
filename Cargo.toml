@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/learning/ntsc-openfx", "crates/learning/ofx-guide-1-basic-machinery", "crates/openfx-bindings", "xtask"]
+members = [
+  "crates/learning/ntsc-openfx",
+  "crates/learning/ofx-guide-1-basic-machinery",
+  "crates/openfx-bindings",
+  "xtask",
+]
 
 [workspace.package]
 license = "MIT"
