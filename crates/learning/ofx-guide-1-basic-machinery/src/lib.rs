@@ -1,6 +1,11 @@
+//! ## TODO
+//!
+//! - [ ] initialzing tracing subscriber (The fact this this is a dynamic
+//!       library should be taken into account.)
+
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
-    sync::{LazyLock, Mutex, OnceLock},
+    sync::{Mutex, OnceLock},
 };
 
 use openfx_bindings::bindings::{
@@ -23,13 +28,13 @@ pub extern "C" fn OfxGetNumberOfPlugins() -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn OfxGetPlugin(nth: c_int) -> *const OfxPlugin {
     if nth == 0 {
-        return &*EFFECT_PLUGIN_STRUCT;
+        return &EFFECT_PLUGIN_STRUCT;
     }
 
     std::ptr::null()
 }
 
-static EFFECT_PLUGIN_STRUCT: LazyLock<OfxPlugin> = LazyLock::new(|| OfxPlugin {
+static EFFECT_PLUGIN_STRUCT: OfxPlugin = OfxPlugin {
     pluginApi: kOfxImageEffectPluginApi.as_ptr(),
     apiVersion: 1,
     pluginIdentifier: c"org.openeffects:BasicExamplePlugin".as_ptr(),
@@ -37,7 +42,7 @@ static EFFECT_PLUGIN_STRUCT: LazyLock<OfxPlugin> = LazyLock::new(|| OfxPlugin {
     pluginVersionMinor: 0,
     setHost: Some(set_host),
     mainEntry: Some(main_entry),
-});
+};
 
 static HOST_STRUCT: OnceLock<SaferHostStruct<'static>> = OnceLock::new();
 #[derive(Clone)]
@@ -59,26 +64,36 @@ struct SharedData<'a> {
 }
 
 unsafe extern "C" fn set_host(host_struct: *mut OfxHost) {
-    let host_struct = unsafe {
-        host_struct
-            .as_ref()
-            .expect("`host_struct` should not be null.")
-    };
-    let host = unsafe {
-        host_struct
-            .host
-            .as_ref()
-            .expect("`host_struct.host` should not be null.")
-    };
-    let fetch_suite = host_struct
-        .fetchSuite
-        .expect("`host_struct.fetchSuite` should not be null.");
+    fn inner(host_struct: *mut OfxHost) -> Result<(), &'static str> {
+        let host_struct = unsafe {
+            host_struct
+                .as_mut()
+                .ok_or("`host_struct` should not be null.")?
+        };
+        let host = unsafe {
+            host_struct
+                .host
+                .as_mut()
+                .ok_or("`host_struct.host` should not be null.")?
+        };
+        let fetch_suite = host_struct
+            .fetchSuite
+            .ok_or("`host_struct.fetchSuite` should not be null.")?;
 
-    if HOST_STRUCT
-        .set(SaferHostStruct { host, fetch_suite })
-        .is_err()
-    {
-        panic!("`HOST_STRUCT` has already been initialized before.");
+        if HOST_STRUCT
+            .set(SaferHostStruct { host, fetch_suite })
+            .is_err()
+        {
+            return Err("`HOST_STRUCT` has already been initialized before.");
+        }
+        Ok(())
+    }
+
+    match inner(host_struct) {
+        Ok(_) => {}
+        Err(err) => {
+            tracing::error!("Failed to set host: {}", err);
+        }
     }
 }
 
@@ -89,12 +104,16 @@ unsafe extern "C" fn main_entry(
     out_args: OfxPropertySetHandle,
 ) -> OfxStatus {
     let effect = handle as OfxImageEffectHandle;
-    let action = unsafe { CStr::from_ptr(action) };
+    let action = if action.is_null() {
+        return OfxStat::kOfxStatReplyDefault;
+    } else {
+        unsafe { CStr::from_ptr(action) }
+    };
 
     let result = match true {
         _ if action == kOfxActionLoad => action_load(),
         _ if action == kOfxActionUnload => action_unload(),
-        _ if action == kOfxActionDescribe => action_describe_action(effect),
+        _ if action == kOfxActionDescribe => action_describe(effect),
         _ if action == kOfxImageEffectActionDescribeInContext => {
             action_describe_in_context(effect, in_args)
         }
@@ -141,9 +160,7 @@ fn action_load() -> OfxResult<()> {
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?
     };
 
-    let mut shared_data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+    let mut shared_data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     if shared_data.is_some() {
         Err(OfxStat::kOfxStatErrFatal)
     } else {
@@ -157,9 +174,7 @@ fn action_load() -> OfxResult<()> {
 }
 
 fn action_unload() -> OfxResult<()> {
-    let mut shared_data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+    let mut shared_data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     if shared_data.take().is_none() {
         Err(OfxStat::kOfxStatErrFatal)
     } else {
@@ -167,16 +182,14 @@ fn action_unload() -> OfxResult<()> {
     }
 }
 
-fn action_describe_action(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
-    let data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+fn action_describe(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
+    let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     let data = data.as_ref().ok_or(OfxStat::kOfxStatErrFatal)?;
 
     let get_property_set = data
         .image_effect_suite
         .getPropertySet
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
     let mut effect_props = std::ptr::null_mut();
     (unsafe { get_property_set(descriptor, &mut effect_props) }).ofx_ok()?;
@@ -184,7 +197,7 @@ fn action_describe_action(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
     let prop_set_string = data
         .property_suite
         .propSetString
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
     unsafe {
         prop_set_string(
@@ -217,23 +230,21 @@ fn action_describe_in_context(
     descriptor: OfxImageEffectHandle,
     in_args: OfxPropertySetHandle,
 ) -> OfxResult<()> {
-    let data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+    let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     let data = data.as_ref().ok_or(OfxStat::kOfxStatErrFatal)?;
 
     let prop_get_string = data
         .property_suite
         .propGetString
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
     let prop_set_string = data
         .property_suite
         .propSetString
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
     let clip_define = data
         .image_effect_suite
         .clipDefine
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
     let mut context: *mut c_char = std::ptr::null_mut();
     unsafe {
@@ -292,19 +303,17 @@ fn action_describe_in_context(
 }
 
 fn action_create_instance(instance: OfxImageEffectHandle) -> OfxResult<()> {
-    let data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+    let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     let data = data.as_ref().ok_or(OfxStat::kOfxStatErrFatal)?;
 
     let get_property_set = data
         .image_effect_suite
         .getPropertySet
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
     let prop_set_pointer = data
         .property_suite
         .propSetPointer
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
     let mut effect_props: *mut OfxPropertySetStruct = std::ptr::null_mut();
     (unsafe { get_property_set(instance, &mut effect_props) }).ofx_ok()?;
@@ -315,26 +324,29 @@ fn action_create_instance(instance: OfxImageEffectHandle) -> OfxResult<()> {
     let my_string = Box::into_raw(my_string) as *mut c_void;
     unsafe {
         // FIXME: `my_string` is leaked if this fails.
-        prop_set_pointer(effect_props, kOfxPropInstanceData.as_ptr(), 0, my_string).ofx_ok()?;
+        if let Err(err) =
+            prop_set_pointer(effect_props, kOfxPropInstanceData.as_ptr(), 0, my_string).ofx_ok()
+        {
+            drop(Box::from_raw(my_string.cast::<String>()));
+            return Err(err);
+        }
     }
 
     Ok(())
 }
 
 fn action_destroy_instance(instance: OfxImageEffectHandle) -> OfxResult<()> {
-    let data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+    let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     let data = data.as_ref().ok_or(OfxStat::kOfxStatErrFatal)?;
 
     let get_property_set = data
         .image_effect_suite
         .getPropertySet
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
     let prop_get_pointer = data
         .property_suite
         .propGetPointer
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
     let mut effect_props: *mut OfxPropertySetStruct = std::ptr::null_mut();
     (unsafe { get_property_set(instance, &mut effect_props) }).ofx_ok()?;
@@ -350,7 +362,7 @@ fn action_destroy_instance(instance: OfxImageEffectHandle) -> OfxResult<()> {
     })
     .ofx_ok()?;
 
-    assert!(!my_string.is_null(), "Instance data should not be null!");
+    // assert!(!my_string.is_null(), "Instance data should not be null!");
 
     drop(unsafe { Box::from_raw(my_string.cast::<String>()) });
 
@@ -362,15 +374,13 @@ fn action_is_identity(
     _in_args: OfxPropertySetHandle,
     out_args: OfxPropertySetHandle,
 ) -> OfxResult<()> {
-    let data = SHARED_DATA
-        .lock()
-        .expect("`SHARED_DATA` mutex should not be poisoned.");
+    let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     let data = data.as_ref().ok_or(OfxStat::kOfxStatErrFatal)?;
 
     let prop_set_string = data
         .property_suite
         .propSetString
-        .ok_or(OfxStat::kOfxStatFailed)?;
+        .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
     unsafe {
         prop_set_string(out_args, kOfxPropName.as_ptr(), 0, c"Source".as_ptr()).ofx_ok()?;
     }

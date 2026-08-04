@@ -17,3 +17,4 @@ repository = "https://github.com/umajho/openfx-playground"
 openfx-bindings = { version = "0.1.7", path = "crates/openfx-bindings" }
 
 bindgen = "0.72"
+tracing = "0.1.44"
