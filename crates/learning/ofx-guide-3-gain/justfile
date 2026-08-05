@@ -1,0 +1,3 @@
+# just build --release
+build *args:
+    cargo xtask learning-ofx-guide-3-build-plugin {{ args }}

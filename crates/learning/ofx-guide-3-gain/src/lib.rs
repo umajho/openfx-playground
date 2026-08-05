@@ -3,28 +3,36 @@
 //! - [ ] initialzing tracing subscriber (The fact this this is a dynamic
 //!       library should be taken into account.)
 
+mod processing;
+
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
     sync::{Mutex, OnceLock},
 };
 
 use openfx_bindings::bindings::{
-    OfxHost, OfxImageEffectHandle, OfxPlugin, OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat,
-    OfxStatus, OfxTime, kOfxActionCreateInstance, kOfxActionDescribe, kOfxActionDestroyInstance,
-    kOfxActionLoad, kOfxActionUnload, kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort,
+    OfxHost, OfxImageClipHandle, OfxImageEffectHandle, OfxParamHandle, OfxPlugin,
+    OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat, OfxStatus, OfxTime,
+    kOfxActionCreateInstance, kOfxActionDescribe, kOfxActionDestroyInstance, kOfxActionLoad,
+    kOfxActionUnload, kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort,
     kOfxImageComponentAlpha, kOfxImageComponentRGB, kOfxImageComponentRGBA,
-    kOfxImageEffectActionDescribeInContext, kOfxImageEffectActionRender,
-    kOfxImageEffectContextFilter, kOfxImageEffectPluginApi, kOfxImageEffectPluginPropGrouping,
-    kOfxImageEffectPluginPropHostFrameThreading, kOfxImageEffectPluginRenderThreadSafety,
-    kOfxImageEffectPropComponents, kOfxImageEffectPropContext, kOfxImageEffectPropPixelDepth,
-    kOfxImageEffectPropRenderWindow, kOfxImageEffectPropSupportedComponents,
-    kOfxImageEffectPropSupportedContexts, kOfxImageEffectPropSupportedPixelDepths,
-    kOfxImageEffectRenderFullySafe, kOfxImagePropBounds, kOfxImagePropData, kOfxImagePropRowBytes,
-    kOfxPropLabel, kOfxPropTime,
+    kOfxImageEffectActionDescribeInContext, kOfxImageEffectActionIsIdentity,
+    kOfxImageEffectActionRender, kOfxImageEffectContextFilter, kOfxImageEffectPluginApi,
+    kOfxImageEffectPluginPropGrouping, kOfxImageEffectPluginPropHostFrameThreading,
+    kOfxImageEffectPluginRenderThreadSafety, kOfxImageEffectPropComponents,
+    kOfxImageEffectPropContext, kOfxImageEffectPropPixelDepth, kOfxImageEffectPropRenderWindow,
+    kOfxImageEffectPropSupportedComponents, kOfxImageEffectPropSupportedContexts,
+    kOfxImageEffectPropSupportedPixelDepths, kOfxImageEffectRenderFullySafe,
+    kOfxParamDoubleTypeScale, kOfxParamPropDefault, kOfxParamPropDisplayMax,
+    kOfxParamPropDisplayMin, kOfxParamPropDoubleType, kOfxParamPropHint, kOfxParamPropMin,
+    kOfxParamTypeBoolean, kOfxParamTypeDouble, kOfxPropInstanceData, kOfxPropLabel, kOfxPropName,
+    kOfxPropTime,
 };
 use openfx_helpers::{SaferHostStruct, SharedData};
 
 use openfx_helpers::shared_data_helper::SharedDataHelper;
+
+use crate::processing::{pixel_processing, rect_i_from_array};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn OfxGetNumberOfPlugins() -> c_int {
@@ -43,7 +51,7 @@ pub extern "C" fn OfxGetPlugin(nth: c_int) -> *const OfxPlugin {
 static EFFECT_PLUGIN_STRUCT: OfxPlugin = OfxPlugin {
     pluginApi: kOfxImageEffectPluginApi.as_ptr(),
     apiVersion: 1,
-    pluginIdentifier: c"org.openeffects:InvertExamplePlugin".as_ptr(),
+    pluginIdentifier: c"org.openeffects:GainExamplePlugin".as_ptr(),
     pluginVersionMajor: 1,
     pluginVersionMinor: 0,
     setHost: Some(set_host),
@@ -54,11 +62,22 @@ static HOST_STRUCT: OnceLock<SaferHostStruct<'static>> = OnceLock::new();
 
 static SHARED_DATA: Mutex<Option<SharedData<'static>>> = Mutex::new(None);
 
+struct MyInstanceData {
+    source_clip: OfxImageClipHandle,
+    output_clip: OfxImageClipHandle,
+
+    gain_param: OfxParamHandle,
+    apply_to_alpha_param: OfxParamHandle,
+}
+
 fn shared_data_lockless() -> OfxResult<SharedData<'static>> {
     let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
     let data = data.as_ref().ok_or(OfxStat::kOfxStatErrFatal)?;
     Ok(data.clone())
 }
+
+const GAIN_PARAM_NAME: &CStr = c"gain";
+const APPLY_TO_ALPHA_PARAM_NAME: &CStr = c"applyToAlpha";
 
 unsafe extern "C" fn set_host(host_struct: *mut OfxHost) {
     fn inner(host_struct: *mut OfxHost) -> Result<(), &'static str> {
@@ -113,12 +132,12 @@ unsafe extern "C" fn main_entry(
         _ if action == kOfxImageEffectActionDescribeInContext => {
             action_describe_in_context(effect, in_args)
         }
-        _ if action == kOfxImageEffectActionRender => action_render(effect, in_args, out_args),
-        _ if action == kOfxActionCreateInstance || action == kOfxActionDestroyInstance => {
-            // We need to handle these actions (even if it's just a no-op) for DaVinci resolve to properly load our plugin
-            // If not handled, it'll load the plugin but will never show the controls or actually render anything
-            Ok(())
+        _ if action == kOfxActionCreateInstance => action_create_instance(effect),
+        _ if action == kOfxActionDestroyInstance => action_destroy_instance(effect),
+        _ if action == kOfxImageEffectActionIsIdentity => {
+            action_is_identity(effect, in_args, out_args)
         }
+        _ if action == kOfxImageEffectActionRender => action_render(effect, in_args, out_args),
         _ => OfxResult::Err(OfxStat::kOfxStatReplyDefault),
     };
 
@@ -155,7 +174,7 @@ fn action_describe(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
 
     let descriptor_helper = data.make_property_set_helper_for_image_effect(descriptor)?;
 
-    descriptor_helper.prop_set_string(kOfxPropLabel, 0, c"OFX Invert Example")?;
+    descriptor_helper.prop_set_string(kOfxPropLabel, 0, c"OFX Gain Example")?;
     descriptor_helper.prop_set_string(kOfxImageEffectPluginPropGrouping, 0, c"OFX Example")?;
     descriptor_helper.prop_set_string(
         kOfxImageEffectPropSupportedContexts,
@@ -218,131 +237,115 @@ fn action_describe_in_context(
         }
     }
 
-    Ok(())
-}
+    let param_set = data.get_param_set(descriptor)?;
 
-/// Look up a pixel in the image. Returns `None` if the pixel was not in the
-/// bounds of the image.
-fn pixel_address<T>(
-    x: c_int,
-    y: c_int,
-    base_address: *mut T,
-    bounds: OfxRectI,
-    row_bytes: c_int,
-    n_comps_per_pixel: c_int,
-) -> Option<*mut T> {
-    if x < bounds.x1 || x >= bounds.x2 || y < bounds.y1 || y >= bounds.y2 {
-        return None;
+    {
+        let param_props = data.param_define(param_set, kOfxParamTypeDouble, GAIN_PARAM_NAME)?;
+        let param_props_helper = data.make_property_set_helper(param_props);
+        param_props_helper.prop_set_string(kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeScale)?;
+        param_props_helper.prop_set_double(kOfxParamPropDefault, 0, 1.0)?;
+        param_props_helper.prop_set_double(kOfxParamPropMin, 0, 0.0)?;
+        param_props_helper.prop_set_double(kOfxParamPropDisplayMin, 0, 0.0)?;
+        param_props_helper.prop_set_double(kOfxParamPropDisplayMax, 0, 1.0)?;
+        param_props_helper.prop_set_string(kOfxPropLabel, 0, c"Gain")?;
+        param_props_helper.prop_set_string(
+            kOfxParamPropHint,
+            0,
+            c"How much to multiply the image by.",
+        )?;
     }
 
-    let x_offset = (x - bounds.x1) as isize;
-    let y_offset = (y - bounds.y1) as isize;
-
-    let row_start_address =
-        unsafe { (base_address as *mut u8).offset(y_offset * row_bytes as isize) as *mut T };
-
-    Some(unsafe { row_start_address.offset(x_offset * n_comps_per_pixel as isize) })
-}
-
-fn pixel_processing<T>(
-    max: T,
-    data: &SharedDataHelper,
-    instance: OfxImageEffectHandle,
-    source_img: OfxPropertySetHandle,
-    output_img: OfxPropertySetHandle,
-    render_window: OfxRectI,
-    n_comps: c_int,
-) -> OfxResult<()>
-where
-    T: std::ops::Sub<Output = T> + Copy + Default,
-{
-    let output_img_helper = data.make_property_set_helper(output_img);
-    let dst_row_bytes = output_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
-    let dst_bounds = {
-        let mut dst_bounds: [c_int; 4] = [0; 4];
-        output_img_helper.prop_get_int_n(kOfxImagePropBounds, &mut dst_bounds)?;
-        rect_i_from_array(&dst_bounds)
-    };
-    let dst_ptr = output_img_helper.prop_get_pointer(kOfxImagePropData, 0)? as *mut T;
-    if dst_ptr.is_null() {
-        return Err(OfxStat::kOfxStatFailed);
-    }
-
-    let source_img_helper = data.make_property_set_helper(source_img);
-    let src_row_bytes = source_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
-    let src_bounds = {
-        let mut src_bounds: [c_int; 4] = [0; 4];
-        source_img_helper.prop_get_int_n(kOfxImagePropBounds, &mut src_bounds)?;
-        rect_i_from_array(&src_bounds)
-    };
-    let src_ptr = source_img_helper.prop_get_pointer(kOfxImagePropData, 0)? as *mut T;
-    if src_ptr.is_null() {
-        return Err(OfxStat::kOfxStatFailed);
-    }
-
-    for y in render_window.y1..render_window.y2 {
-        if y % 20 == 0
-            && data
-                .inner()
-                .image_effect_suite
-                .abort
-                .is_some_and(|abort| unsafe { abort(instance) } != 0)
-        {
-            return Ok(());
-        }
-
-        let Some(dst_pix) = pixel_address(
-            render_window.x1,
-            y,
-            dst_ptr,
-            dst_bounds,
-            dst_row_bytes,
-            n_comps,
-        ) else {
-            return Err(OfxStat::kOfxStatFailed);
-        };
-        let mut dst_pix = dst_pix;
-
-        for x in render_window.x1..render_window.x2 {
-            let src_pix = pixel_address(x, y, src_ptr, src_bounds, src_row_bytes, n_comps);
-
-            if let Some(src_pix) = src_pix {
-                let mut src_pix = src_pix;
-                for i in 0..n_comps {
-                    unsafe {
-                        *dst_pix = if i != 3 { max - *src_pix } else { *src_pix };
-                        dst_pix = dst_pix.offset(1);
-                        src_pix = src_pix.offset(1);
-                    }
-                }
-            } else {
-                for _ in 0..n_comps {
-                    unsafe {
-                        *dst_pix = T::default();
-                        dst_pix = dst_pix.offset(1);
-                    }
-                }
-            }
-        }
+    {
+        let param_props =
+            data.param_define(param_set, kOfxParamTypeBoolean, APPLY_TO_ALPHA_PARAM_NAME)?;
+        let param_props_helper = data.make_property_set_helper(param_props);
+        param_props_helper.prop_set_int(kOfxParamPropDefault, 0, 0)?;
+        param_props_helper.prop_set_string(kOfxPropLabel, 0, c"Apply to Alpha")?;
+        param_props_helper.prop_set_string(
+            kOfxParamPropHint,
+            0,
+            c"Whether to apply the gain value to alpha as well.",
+        )?;
     }
 
     Ok(())
 }
 
-fn rect_i_from_array(arr: &[c_int; 4]) -> OfxRectI {
-    OfxRectI {
-        x1: arr[0],
-        y1: arr[1],
-        x2: arr[2],
-        y2: arr[3],
+fn action_create_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatus> {
+    let data = shared_data_lockless()?;
+    let data = SharedDataHelper::try_new(&data)?;
+
+    let instance_helper = data.make_property_set_helper_for_image_effect(instance)?;
+
+    let source_clip = data.clip_get_handle(instance, c"Source")?;
+    let output_clip = data.clip_get_handle(instance, c"Output")?;
+
+    let param_set = data.get_param_set(instance)?;
+    let gain_param = data.param_get_handle(param_set, GAIN_PARAM_NAME)?;
+    let apply_to_alpha_param = data.param_get_handle(param_set, APPLY_TO_ALPHA_PARAM_NAME)?;
+
+    let my_data = MyInstanceData {
+        source_clip,
+        output_clip,
+        gain_param,
+        apply_to_alpha_param,
+    };
+    let my_data_ptr = Box::into_raw(Box::new(my_data)) as *mut c_void;
+
+    instance_helper.prop_set_pointer(kOfxPropInstanceData, 0, my_data_ptr)?;
+
+    Ok(())
+}
+
+fn action_destroy_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatus> {
+    let data = shared_data_lockless()?;
+    let data = SharedDataHelper::try_new(&data)?;
+
+    let instance_helper = data.make_property_set_helper_for_image_effect(instance)?;
+    let my_data_ptr = instance_helper.prop_get_pointer(kOfxPropInstanceData, 0)?;
+    if my_data_ptr.is_null() {
+        return Err(OfxStat::kOfxStatErrFatal);
+    }
+
+    drop(unsafe { Box::from_raw(my_data_ptr as *mut MyInstanceData) });
+
+    Ok(())
+}
+
+fn action_is_identity(
+    effect: OfxImageEffectHandle,
+    in_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
+    out_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
+) -> Result<(), OfxStatus> {
+    let data = shared_data_lockless()?;
+    let data = SharedDataHelper::try_new(&data)?;
+
+    let instance_helper = data.make_property_set_helper_for_image_effect(effect)?;
+    let my_data_ptr = instance_helper.prop_get_pointer(kOfxPropInstanceData, 0)?;
+    if my_data_ptr.is_null() {
+        return Err(OfxStat::kOfxStatErrFatal);
+    }
+    let my_data = unsafe { &*(my_data_ptr as *mut MyInstanceData) };
+
+    let in_args_helper = data.make_property_set_helper(in_args);
+    let out_args_helper = data.make_property_set_helper(out_args);
+
+    let time = in_args_helper.prop_get_double(kOfxPropTime, 0)?;
+    let gain = data.param_get_value_at_time_double(my_data.gain_param, time)?;
+
+    if gain - 1.0 < 0.000000001 {
+        out_args_helper.prop_set_string(kOfxPropName, 0, c"Source")?;
+        Ok(())
+    } else {
+        Err(OfxStat::kOfxStatReplyDefault)
     }
 }
 
 fn action_render(
     instance: OfxImageEffectHandle,
-    in_args: OfxPropertySetHandle,
-    _out_args: OfxPropertySetHandle,
-) -> OfxResult<()> {
+    in_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
+    _out_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
+) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
@@ -355,13 +358,22 @@ fn action_render(
         rect_i_from_array(&render_window)
     };
 
-    let output_clip = data.clip_get_handle(instance, c"Output")?;
-    let source_clip = data.clip_get_handle(instance, c"Source")?;
+    let instance_helper = data.make_property_set_helper_for_image_effect(instance)?;
+    let my_data_ptr = instance_helper.prop_get_pointer(kOfxPropInstanceData, 0)?;
+    if my_data_ptr.is_null() {
+        return Err(OfxStat::kOfxStatErrFatal);
+    }
+    let my_data = unsafe { &*(my_data_ptr as *mut MyInstanceData) };
 
-    let output_img_m = data.clip_get_image_managed(output_clip, time, None)?;
-    let source_img_m = data.clip_get_image_managed(source_clip, time, None)?;
+    let gain = data.param_get_value_at_time_double(my_data.gain_param, time)?;
+    let apply_to_alpha = data.param_get_value_at_time_int(my_data.apply_to_alpha_param, time)? != 0;
+
+    let output_img_m = data.clip_get_image_managed(my_data.output_clip, time, None)?;
+    let source_img_m = data.clip_get_image_managed(my_data.source_clip, time, None)?;
 
     fn inner(
+        gain: f64,
+        apply_to_alpha: bool,
         data: &SharedDataHelper,
         instance: OfxImageEffectHandle,
         source_img: OfxPropertySetHandle,
@@ -381,7 +393,11 @@ fn action_render(
         let data_type = output_img_helper.prop_get_string(kOfxImageEffectPropPixelDepth, 0)?;
         match data_type {
             Some(c) if c == kOfxBitDepthByte => pixel_processing(
+                |f| f as u8,
+                |v| v as f64,
                 255u8,
+                gain,
+                apply_to_alpha,
                 data,
                 instance,
                 source_img,
@@ -390,7 +406,11 @@ fn action_render(
                 n_comps,
             ),
             Some(c) if c == kOfxBitDepthShort => pixel_processing(
+                |f| f as u16,
+                |v| v as f64,
                 65535u16,
+                gain,
+                apply_to_alpha,
                 data,
                 instance,
                 source_img,
@@ -399,7 +419,11 @@ fn action_render(
                 n_comps,
             ),
             Some(c) if c == kOfxBitDepthFloat => pixel_processing(
+                |f| f as f32,
+                |v| v as f64,
                 1.0f32,
+                gain,
+                apply_to_alpha,
                 data,
                 instance,
                 source_img,
@@ -414,6 +438,8 @@ fn action_render(
     }
 
     let result = inner(
+        gain,
+        apply_to_alpha,
         &data,
         instance,
         source_img_m.image_handle(),

@@ -1,8 +1,8 @@
 use std::ffi::{CStr, c_char, c_int, c_void};
 
 use openfx_bindings::bindings::{
-    OfxImageClipHandle, OfxImageEffectHandle, OfxPropertySetHandle, OfxPropertySetStruct, OfxRectD,
-    OfxResult, OfxTime,
+    OfxImageClipHandle, OfxImageEffectHandle, OfxParamHandle, OfxParamSetHandle,
+    OfxPropertySetHandle, OfxPropertySetStruct, OfxRectD, OfxResult, OfxStat, OfxTime,
 };
 
 use crate::SharedData;
@@ -24,14 +24,7 @@ impl<'data> SharedDataHelper<'data> {
         &'helper self,
         handle: OfxImageEffectHandle,
     ) -> OfxResult<PropertySetHelper<'helper, 'data>> {
-        let get_property_set = self
-            .shared_data
-            .image_effect_suite
-            .getPropertySet
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
-
-        let mut props: *mut OfxPropertySetStruct = std::ptr::null_mut();
-        (unsafe { get_property_set(handle, &mut props) }).ofx_ok()?;
+        let props = self.get_property_set(handle)?;
 
         Ok(self.make_property_set_helper(props as OfxPropertySetHandle))
     }
@@ -46,6 +39,19 @@ impl<'data> SharedDataHelper<'data> {
         }
     }
 
+    fn get_property_set(&self, handle: OfxImageEffectHandle) -> OfxResult<OfxPropertySetHandle> {
+        let get_property_set = self
+            .shared_data
+            .image_effect_suite
+            .getPropertySet
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut props: *mut OfxPropertySetStruct = std::ptr::null_mut();
+        (unsafe { get_property_set(handle, &mut props) }).ofx_ok()?;
+
+        Ok(props as OfxPropertySetHandle)
+    }
+
     pub fn prop_set_string(
         &self,
         handle: OfxPropertySetHandle,
@@ -57,7 +63,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propSetString
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         (unsafe { prop_set_string(handle, property.as_ptr(), index, value.as_ptr()) }).ofx_ok()
     }
@@ -72,7 +78,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propGetString
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut value_ptr: *mut c_char = std::ptr::null_mut();
         (unsafe { prop_get_string(handle, property.as_ptr(), index, &mut value_ptr) }).ofx_ok()?;
@@ -96,7 +102,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propSetInt
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         (unsafe { prop_set_int(handle, property.as_ptr(), index, value) }).ofx_ok()
     }
@@ -111,7 +117,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propGetInt
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut value: c_int = 0;
         (unsafe { prop_get_int(handle, property.as_ptr(), index, &mut value) }).ofx_ok()?;
@@ -129,7 +135,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propGetIntN
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         (unsafe {
             prop_get_int_n(
@@ -142,6 +148,22 @@ impl<'data> SharedDataHelper<'data> {
         .ofx_ok()
     }
 
+    pub fn prop_set_double(
+        &self,
+        handle: OfxPropertySetHandle,
+        property: &CStr,
+        index: c_int,
+        value: f64,
+    ) -> OfxResult<()> {
+        let prop_set_double = self
+            .shared_data
+            .property_suite
+            .propSetDouble
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        (unsafe { prop_set_double(handle, property.as_ptr(), index, value) }).ofx_ok()
+    }
+
     pub fn prop_get_double(
         &self,
         handle: OfxPropertySetHandle,
@@ -152,12 +174,28 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propGetDouble
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut value: f64 = 0.0;
         (unsafe { prop_get_double(handle, property.as_ptr(), index, &mut value) }).ofx_ok()?;
 
         Ok(value)
+    }
+
+    pub fn prop_set_pointer(
+        &self,
+        handle: OfxPropertySetHandle,
+        property: &CStr,
+        index: c_int,
+        value: *mut c_void,
+    ) -> OfxResult<()> {
+        let prop_set_pointer = self
+            .shared_data
+            .property_suite
+            .propSetPointer
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        (unsafe { prop_set_pointer(handle, property.as_ptr(), index, value) }).ofx_ok()
     }
 
     pub fn prop_get_pointer(
@@ -170,7 +208,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .property_suite
             .propGetPointer
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut value_ptr: *mut c_void = std::ptr::null_mut();
         (unsafe { prop_get_pointer(handle, property.as_ptr(), index, &mut value_ptr) }).ofx_ok()?;
@@ -187,7 +225,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .image_effect_suite
             .clipDefine
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut props: OfxPropertySetHandle = std::ptr::null_mut();
         (unsafe { clip_define(image_effect, name.as_ptr(), &mut props) }).ofx_ok()?;
@@ -204,7 +242,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .image_effect_suite
             .clipGetHandle
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut clip: OfxImageClipHandle = std::ptr::null_mut();
         (unsafe { clip_get_handle(image_effect, name.as_ptr(), &mut clip, std::ptr::null_mut()) })
@@ -213,7 +251,8 @@ impl<'data> SharedDataHelper<'data> {
         Ok(clip)
     }
 
-    fn clip_get_image(
+    /// Use [`Self::clip_get_image_managed`].
+    pub fn clip_get_image_(
         &self,
         clip: OfxImageClipHandle,
         time: OfxTime,
@@ -223,7 +262,7 @@ impl<'data> SharedDataHelper<'data> {
             .shared_data
             .image_effect_suite
             .clipGetImage
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut image: OfxPropertySetHandle = std::ptr::null_mut();
         (unsafe { clip_get_image(clip, time, region.unwrap_or(std::ptr::null()), &mut image) })
@@ -238,7 +277,7 @@ impl<'data> SharedDataHelper<'data> {
         time: OfxTime,
         region: Option<*const OfxRectD>,
     ) -> OfxResult<ClipImageManaged<'helper, 'data>> {
-        let image_handle = self.clip_get_image(clip, time, region)?;
+        let image_handle = self.clip_get_image_(clip, time, region)?;
 
         Ok(ClipImageManaged {
             shared_data_helper: self,
@@ -246,14 +285,105 @@ impl<'data> SharedDataHelper<'data> {
         })
     }
 
-    pub fn clip_release_image(&self, image_handle: OfxPropertySetHandle) -> OfxResult<()> {
+    /// Use [`Self::clip_get_image_managed`] to get a managed image that does
+    /// not require calling this function manually to release it.
+    pub fn clip_release_image_(&self, image_handle: OfxPropertySetHandle) -> OfxResult<()> {
         let clip_release_image = self
             .shared_data
             .image_effect_suite
             .clipReleaseImage
-            .ok_or(openfx_bindings::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         (unsafe { clip_release_image(image_handle) }).ofx_ok()
+    }
+
+    pub fn get_param_set(
+        &self,
+        image_effect: OfxImageEffectHandle,
+    ) -> OfxResult<OfxParamSetHandle> {
+        let get_param_set = self
+            .shared_data
+            .image_effect_suite
+            .getParamSet
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut param_set: OfxParamSetHandle = std::ptr::null_mut();
+        (unsafe { get_param_set(image_effect, &mut param_set) }).ofx_ok()?;
+
+        Ok(param_set)
+    }
+
+    pub fn param_define(
+        &self,
+        param_set: OfxParamSetHandle,
+        param_type: &CStr,
+        name: &CStr,
+    ) -> OfxResult<OfxPropertySetHandle> {
+        let param_define = self
+            .shared_data
+            .parameter_suite
+            .paramDefine
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut props: OfxPropertySetHandle = std::ptr::null_mut();
+        (unsafe { param_define(param_set, param_type.as_ptr(), name.as_ptr(), &mut props) })
+            .ofx_ok()?;
+
+        Ok(props)
+    }
+
+    pub fn param_get_handle(
+        &self,
+        param_set: OfxParamSetHandle,
+        name: &CStr,
+    ) -> OfxResult<OfxParamHandle> {
+        let param_get_handle = self
+            .shared_data
+            .parameter_suite
+            .paramGetHandle
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut props: OfxParamHandle = std::ptr::null_mut();
+        (unsafe { param_get_handle(param_set, name.as_ptr(), &mut props, std::ptr::null_mut()) })
+            .ofx_ok()?;
+
+        Ok(props)
+    }
+
+    /// ## Safety
+    ///
+    /// TODO
+    fn param_get_value_at_time<T>(
+        &self,
+        param_handle: OfxParamHandle,
+        time: OfxTime,
+    ) -> OfxResult<T> {
+        let param_get_value_at_time = self
+            .shared_data
+            .parameter_suite
+            .paramGetValueAtTime
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut value: T = unsafe { std::mem::zeroed() };
+        (unsafe { param_get_value_at_time(param_handle, time, &mut value) }).ofx_ok()?;
+
+        Ok(value)
+    }
+
+    pub fn param_get_value_at_time_double(
+        &self,
+        param_handle: OfxParamHandle,
+        time: OfxTime,
+    ) -> OfxResult<f64> {
+        self.param_get_value_at_time(param_handle, time)
+    }
+
+    pub fn param_get_value_at_time_int(
+        &self,
+        param_handle: OfxParamHandle,
+        time: OfxTime,
+    ) -> OfxResult<c_int> {
+        self.param_get_value_at_time(param_handle, time)
     }
 }
 
@@ -288,9 +418,24 @@ impl<'helper, 'data> PropertySetHelper<'helper, 'data> {
             .prop_get_int_n(self.props, property, values)
     }
 
+    pub fn prop_set_double(&self, property: &CStr, index: c_int, value: f64) -> OfxResult<()> {
+        self.shared_data_helper
+            .prop_set_double(self.props, property, index, value)
+    }
+
     pub fn prop_get_double(&self, property: &CStr, index: c_int) -> OfxResult<f64> {
         self.shared_data_helper
             .prop_get_double(self.props, property, index)
+    }
+
+    pub fn prop_set_pointer(
+        &self,
+        property: &CStr,
+        index: c_int,
+        value: *mut c_void,
+    ) -> OfxResult<()> {
+        self.shared_data_helper
+            .prop_set_pointer(self.props, property, index, value)
     }
 
     pub fn prop_get_pointer(&self, property: &CStr, index: c_int) -> OfxResult<*mut c_void> {
@@ -318,6 +463,6 @@ impl Drop for ClipImageManaged<'_, '_> {
     fn drop(&mut self) {
         let _ = self
             .shared_data_helper
-            .clip_release_image(self.image_handle);
+            .clip_release_image_(self.image_handle);
     }
 }

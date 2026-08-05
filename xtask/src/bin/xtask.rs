@@ -8,13 +8,15 @@ use std::process;
 use xtask::learning_ntsc_openfx_build_plugin;
 use xtask::learning_ofx_guide_1_build_plugin;
 use xtask::learning_ofx_guide_2_build_plugin;
+use xtask::learning_ofx_guide_3_build_plugin;
 
 fn main() {
     let cmd = clap::Command::new("xtask")
         .subcommand_required(true)
         .subcommand(learning_ntsc_openfx_build_plugin::command())
         .subcommand(learning_ofx_guide_1_build_plugin::command())
-        .subcommand(learning_ofx_guide_2_build_plugin::command());
+        .subcommand(learning_ofx_guide_2_build_plugin::command())
+        .subcommand(learning_ofx_guide_3_build_plugin::command());
 
     let matches = cmd.get_matches();
 
@@ -29,6 +31,9 @@ fn main() {
         }
         "learning-ofx-guide-2-build-plugin" => {
             learning_ofx_guide_2_build_plugin::main(args).unwrap();
+        }
+        "learning-ofx-guide-3-build-plugin" => {
+            learning_ofx_guide_3_build_plugin::main(args).unwrap();
         }
         _ => {
             println!("Invalid xtask: {task}");
