@@ -497,7 +497,6 @@ name = "ofx-guide-2-invert"
 version = "0.1.0"
 dependencies = [
  "openfx-bindings",
- "openfx-helpers",
  "tracing",
 ]
 
@@ -506,7 +505,6 @@ name = "ofx-guide-3-gain"
 version = "0.1.0"
 dependencies = [
  "openfx-bindings",
- "openfx-helpers",
  "tracing",
 ]
 
@@ -527,13 +525,6 @@ name = "openfx-bindings"
 version = "0.1.7"
 dependencies = [
  "bindgen",
-]
-
-[[package]]
-name = "openfx-helpers"
-version = "0.1.0"
-dependencies = [
- "openfx-bindings",
 ]
 
 [[package]]

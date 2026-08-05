@@ -7,7 +7,6 @@ repository.workspace = true
 
 [dependencies]
 openfx-bindings.workspace = true
-openfx-helpers.workspace = true
 tracing.workspace = true
 
 [lib]

@@ -2,10 +2,10 @@ pub mod shared_data_helper;
 
 use std::ffi::{c_char, c_int, c_void};
 
-use openfx_bindings::bindings::{
-    OfxImageEffectSuiteV1, OfxParameterSuiteV1, OfxPropertySetHandle, OfxPropertySetStruct,
-    OfxPropertySuiteV1, OfxResult, OfxStat, kOfxImageEffectSuite, kOfxParameterSuite,
-    kOfxPropertySuite,
+use crate::bindings::{
+    kOfxImageEffectSuite, kOfxParameterSuite, kOfxPropertySuite, OfxImageEffectSuiteV1,
+    OfxParameterSuiteV1, OfxPropertySetHandle, OfxPropertySetStruct, OfxPropertySuiteV1, OfxResult,
+    OfxStat,
 };
 
 #[derive(Clone)]

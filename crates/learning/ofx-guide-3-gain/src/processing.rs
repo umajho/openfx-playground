@@ -1,10 +1,12 @@
 use std::ffi::c_int;
 
-use openfx_bindings::bindings::{
-    OfxImageEffectHandle, OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat, kOfxImagePropBounds,
-    kOfxImagePropData, kOfxImagePropRowBytes,
+use openfx_bindings::{
+    bindings::{
+        OfxImageEffectHandle, OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat,
+        kOfxImagePropBounds, kOfxImagePropData, kOfxImagePropRowBytes,
+    },
+    helpers::shared_data_helper::SharedDataHelper,
 };
-use openfx_helpers::shared_data_helper::SharedDataHelper;
 
 pub fn pixel_processing<T>(
     from_f64: fn(f64) -> T,

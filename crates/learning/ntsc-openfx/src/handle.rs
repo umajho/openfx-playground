@@ -5,7 +5,7 @@ use std::{
     ptr::{self, NonNull},
 };
 
-use crate::bindings::*;
+use openfx_bindings::bindings::*;
 
 pub struct ImageDataHandle<T> {
     handle: OfxImageMemoryHandle,

@@ -3,6 +3,8 @@
 #![allow(non_snake_case)]
 #![allow(unsafe_op_in_unsafe_fn)]
 
+mod handle;
+
 use core::slice;
 use std::{
     collections::HashMap,
@@ -23,7 +25,9 @@ use ntsc_rs::{
     yiq_fielding::{BlitInfo, DeinterlaceMode, Normalize, PixelFormat, Rect, Rgb, Rgbx, YiqView},
 };
 
-use openfx_bindings::{bindings::*, handle::*};
+use openfx_bindings::bindings::*;
+
+use crate::handle::*;
 
 static PLUGIN_INFO: OnceLock<OfxPlugin> = OnceLock::new();
 static shared_data: OnceLock<SharedData> = OnceLock::new();

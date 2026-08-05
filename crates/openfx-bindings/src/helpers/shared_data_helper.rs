@@ -1,11 +1,11 @@
-use std::ffi::{CStr, c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
 
-use openfx_bindings::bindings::{
+use crate::bindings::{
     OfxImageClipHandle, OfxImageEffectHandle, OfxParamHandle, OfxParamSetHandle,
     OfxPropertySetHandle, OfxPropertySetStruct, OfxRectD, OfxResult, OfxStat, OfxTime,
 };
 
-use crate::SharedData;
+use super::SharedData;
 
 pub struct SharedDataHelper<'data> {
     shared_data: &'data SharedData<'data>,

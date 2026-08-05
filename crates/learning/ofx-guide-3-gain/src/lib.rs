@@ -10,27 +10,27 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use openfx_bindings::bindings::{
-    OfxHost, OfxImageClipHandle, OfxImageEffectHandle, OfxParamHandle, OfxPlugin,
-    OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat, OfxStatus, OfxTime,
-    kOfxActionCreateInstance, kOfxActionDescribe, kOfxActionDestroyInstance, kOfxActionLoad,
-    kOfxActionUnload, kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort,
-    kOfxImageComponentAlpha, kOfxImageComponentRGB, kOfxImageComponentRGBA,
-    kOfxImageEffectActionDescribeInContext, kOfxImageEffectActionIsIdentity,
-    kOfxImageEffectActionRender, kOfxImageEffectContextFilter, kOfxImageEffectPluginApi,
-    kOfxImageEffectPluginPropGrouping, kOfxImageEffectPluginPropHostFrameThreading,
-    kOfxImageEffectPluginRenderThreadSafety, kOfxImageEffectPropComponents,
-    kOfxImageEffectPropContext, kOfxImageEffectPropPixelDepth, kOfxImageEffectPropRenderWindow,
-    kOfxImageEffectPropSupportedComponents, kOfxImageEffectPropSupportedContexts,
-    kOfxImageEffectPropSupportedPixelDepths, kOfxImageEffectRenderFullySafe,
-    kOfxParamDoubleTypeScale, kOfxParamPropDefault, kOfxParamPropDisplayMax,
-    kOfxParamPropDisplayMin, kOfxParamPropDoubleType, kOfxParamPropHint, kOfxParamPropMin,
-    kOfxParamTypeBoolean, kOfxParamTypeDouble, kOfxPropInstanceData, kOfxPropLabel, kOfxPropName,
-    kOfxPropTime,
+use openfx_bindings::{
+    bindings::{
+        OfxHost, OfxImageClipHandle, OfxImageEffectHandle, OfxParamHandle, OfxPlugin,
+        OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat, OfxStatus, OfxTime,
+        kOfxActionCreateInstance, kOfxActionDescribe, kOfxActionDestroyInstance, kOfxActionLoad,
+        kOfxActionUnload, kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort,
+        kOfxImageComponentAlpha, kOfxImageComponentRGB, kOfxImageComponentRGBA,
+        kOfxImageEffectActionDescribeInContext, kOfxImageEffectActionIsIdentity,
+        kOfxImageEffectActionRender, kOfxImageEffectContextFilter, kOfxImageEffectPluginApi,
+        kOfxImageEffectPluginPropGrouping, kOfxImageEffectPluginPropHostFrameThreading,
+        kOfxImageEffectPluginRenderThreadSafety, kOfxImageEffectPropComponents,
+        kOfxImageEffectPropContext, kOfxImageEffectPropPixelDepth, kOfxImageEffectPropRenderWindow,
+        kOfxImageEffectPropSupportedComponents, kOfxImageEffectPropSupportedContexts,
+        kOfxImageEffectPropSupportedPixelDepths, kOfxImageEffectRenderFullySafe,
+        kOfxParamDoubleTypeScale, kOfxParamPropDefault, kOfxParamPropDisplayMax,
+        kOfxParamPropDisplayMin, kOfxParamPropDoubleType, kOfxParamPropHint, kOfxParamPropMin,
+        kOfxParamTypeBoolean, kOfxParamTypeDouble, kOfxPropInstanceData, kOfxPropLabel,
+        kOfxPropName, kOfxPropTime,
+    },
+    helpers::{SaferHostStruct, SharedData, shared_data_helper::SharedDataHelper},
 };
-use openfx_helpers::{SaferHostStruct, SharedData};
-
-use openfx_helpers::shared_data_helper::SharedDataHelper;
 
 use crate::processing::{pixel_processing, rect_i_from_array};
 
