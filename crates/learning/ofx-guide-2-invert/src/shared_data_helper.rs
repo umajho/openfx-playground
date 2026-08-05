@@ -7,23 +7,23 @@ use openfx_bindings::bindings::{
 
 use crate::SharedData;
 
-pub struct SharedDataHelper<'a> {
-    shared_data: &'a SharedData<'a>,
+pub struct SharedDataHelper<'data> {
+    shared_data: &'data SharedData<'data>,
 }
 
-impl<'a> SharedDataHelper<'a> {
-    pub fn try_new(shared_data: &'a SharedData<'a>) -> OfxResult<Self> {
+impl<'data> SharedDataHelper<'data> {
+    pub fn try_new(shared_data: &'data SharedData<'data>) -> OfxResult<Self> {
         Ok(Self { shared_data })
     }
 
-    pub fn inner(&self) -> &SharedData<'a> {
+    pub fn inner(&self) -> &SharedData<'data> {
         self.shared_data
     }
 
     pub fn make_property_set_helper_for_image_effect<'helper>(
         &'helper self,
         handle: OfxImageEffectHandle,
-    ) -> OfxResult<PropertySetHelper<'helper, 'a>> {
+    ) -> OfxResult<PropertySetHelper<'helper, 'data>> {
         let get_property_set = self
             .shared_data
             .image_effect_suite
@@ -39,7 +39,7 @@ impl<'a> SharedDataHelper<'a> {
     pub fn make_property_set_helper<'helper>(
         &'helper self,
         handle: OfxPropertySetHandle,
-    ) -> PropertySetHelper<'helper, 'a> {
+    ) -> PropertySetHelper<'helper, 'data> {
         PropertySetHelper {
             shared_data_helper: self,
             props: handle,
@@ -237,7 +237,7 @@ impl<'a> SharedDataHelper<'a> {
         clip: OfxImageClipHandle,
         time: OfxTime,
         region: Option<*const OfxRectD>,
-    ) -> OfxResult<ClipImageManaged<'helper, 'a>> {
+    ) -> OfxResult<ClipImageManaged<'helper, 'data>> {
         let image_handle = self.clip_get_image(clip, time, region)?;
 
         Ok(ClipImageManaged {
