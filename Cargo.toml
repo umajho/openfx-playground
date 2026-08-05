@@ -5,6 +5,7 @@ members = [
   "crates/learning/ofx-guide-1-basic-machinery",
   "crates/learning/ofx-guide-2-invert",
   "crates/openfx-bindings",
+  "crates/openfx-helpers",
   "xtask",
 ]
 
@@ -16,6 +17,7 @@ repository = "https://github.com/umajho/openfx-playground"
 
 [workspace.dependencies]
 openfx-bindings = { version = "0.1.7", path = "crates/openfx-bindings" }
+openfx-helpers = { version = "0.1.0", path = "crates/openfx-helpers" }
 
 bindgen = "0.72"
 tracing = "0.1.44"

@@ -1,5 +1,6 @@
 [package]
-name = "ofx-guide-2-invert"
+name = "openfx-helpers"
+publish = false
 version = "0.1.0"
 edition = "2024"
 license.workspace = true
@@ -7,11 +8,6 @@ repository.workspace = true
 
 [dependencies]
 openfx-bindings.workspace = true
-openfx-helpers.workspace = true
-tracing.workspace = true
-
-[lib]
-crate-type = ["cdylib"]
 
 [lints]
 workspace = true

@@ -3,8 +3,6 @@
 //! - [ ] initialzing tracing subscriber (The fact this this is a dynamic
 //!       library should be taken into account.)
 
-mod shared_data_helper;
-
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
     sync::{Mutex, OnceLock},
@@ -12,21 +10,22 @@ use std::{
 
 use openfx_bindings::bindings::{
     OfxHost, OfxImageEffectHandle, OfxImageEffectSuiteV1, OfxPlugin, OfxPropertySetHandle,
-    OfxPropertySetStruct, OfxPropertySuiteV1, OfxRectI, OfxResult, OfxStat, OfxStatus, OfxTime,
-    kOfxActionCreateInstance, kOfxActionDescribe, kOfxActionDestroyInstance, kOfxActionLoad,
-    kOfxActionUnload, kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort,
-    kOfxImageComponentAlpha, kOfxImageComponentRGB, kOfxImageComponentRGBA,
-    kOfxImageEffectActionDescribeInContext, kOfxImageEffectActionRender,
-    kOfxImageEffectContextFilter, kOfxImageEffectPluginApi, kOfxImageEffectPluginPropGrouping,
-    kOfxImageEffectPluginPropHostFrameThreading, kOfxImageEffectPluginRenderThreadSafety,
-    kOfxImageEffectPropComponents, kOfxImageEffectPropContext, kOfxImageEffectPropPixelDepth,
-    kOfxImageEffectPropRenderWindow, kOfxImageEffectPropSupportedComponents,
-    kOfxImageEffectPropSupportedContexts, kOfxImageEffectPropSupportedPixelDepths,
-    kOfxImageEffectRenderFullySafe, kOfxImageEffectSuite, kOfxImagePropBounds, kOfxImagePropData,
-    kOfxImagePropRowBytes, kOfxPropLabel, kOfxPropTime, kOfxPropertySuite,
+    OfxPropertySuiteV1, OfxRectI, OfxResult, OfxStat, OfxStatus, OfxTime, kOfxActionCreateInstance,
+    kOfxActionDescribe, kOfxActionDestroyInstance, kOfxActionLoad, kOfxActionUnload,
+    kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort, kOfxImageComponentAlpha,
+    kOfxImageComponentRGB, kOfxImageComponentRGBA, kOfxImageEffectActionDescribeInContext,
+    kOfxImageEffectActionRender, kOfxImageEffectContextFilter, kOfxImageEffectPluginApi,
+    kOfxImageEffectPluginPropGrouping, kOfxImageEffectPluginPropHostFrameThreading,
+    kOfxImageEffectPluginRenderThreadSafety, kOfxImageEffectPropComponents,
+    kOfxImageEffectPropContext, kOfxImageEffectPropPixelDepth, kOfxImageEffectPropRenderWindow,
+    kOfxImageEffectPropSupportedComponents, kOfxImageEffectPropSupportedContexts,
+    kOfxImageEffectPropSupportedPixelDepths, kOfxImageEffectRenderFullySafe, kOfxImageEffectSuite,
+    kOfxImagePropBounds, kOfxImagePropData, kOfxImagePropRowBytes, kOfxPropLabel, kOfxPropTime,
+    kOfxPropertySuite,
 };
+use openfx_helpers::{SaferHostStruct, SharedData};
 
-use crate::shared_data_helper::SharedDataHelper;
+use openfx_helpers::shared_data_helper::SharedDataHelper;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn OfxGetNumberOfPlugins() -> c_int {
@@ -53,24 +52,8 @@ static EFFECT_PLUGIN_STRUCT: OfxPlugin = OfxPlugin {
 };
 
 static HOST_STRUCT: OnceLock<SaferHostStruct<'static>> = OnceLock::new();
-#[derive(Clone)]
-struct SaferHostStruct<'a> {
-    host: &'a OfxPropertySetStruct,
-    fetch_suite: unsafe extern "C" fn(
-        host: OfxPropertySetHandle,
-        suite_name: *const c_char,
-        suite_version: c_int,
-    ) -> *const c_void,
-}
 
 static SHARED_DATA: Mutex<Option<SharedData<'static>>> = Mutex::new(None);
-#[derive(Clone)]
-struct SharedData<'a> {
-    #[expect(unused)]
-    host_struct: SaferHostStruct<'a>,
-    property_suite: &'a OfxPropertySuiteV1,
-    image_effect_suite: &'a OfxImageEffectSuiteV1,
-}
 
 fn shared_data_lockless() -> OfxResult<SharedData<'static>> {
     let data = SHARED_DATA.lock().map_err(|_| OfxStat::kOfxStatErrFatal)?;
