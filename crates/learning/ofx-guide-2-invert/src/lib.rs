@@ -1,5 +1,3 @@
-#![feature(once_cell_try)]
-
 //! ## TODO
 //!
 //! - [ ] initialzing tracing subscriber (The fact this this is a dynamic
@@ -201,9 +199,9 @@ fn action_unload() -> OfxResult<()> {
 
 fn action_describe(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
     let data = shared_data_lockless()?;
-    let mut data = SharedDataHelper::try_new(&data)?;
+    let data = SharedDataHelper::try_new(&data)?;
 
-    let mut descriptor_helper = data.make_property_set_helper_for_image_effect(descriptor)?;
+    let descriptor_helper = data.make_property_set_helper_for_image_effect(descriptor)?;
 
     descriptor_helper.prop_set_string(kOfxPropLabel, 0, c"OFX Invert Example")?;
     descriptor_helper.prop_set_string(kOfxImageEffectPluginPropGrouping, 0, c"OFX Example")?;
@@ -239,9 +237,9 @@ fn action_describe_in_context(
     in_args: OfxPropertySetHandle,
 ) -> OfxResult<()> {
     let data = shared_data_lockless()?;
-    let mut data = SharedDataHelper::try_new(&data)?;
+    let data = SharedDataHelper::try_new(&data)?;
 
-    let mut in_args_helper = data.make_property_set_helper(in_args);
+    let in_args_helper = data.make_property_set_helper(in_args);
 
     let context = in_args_helper.prop_get_string(kOfxImageEffectPropContext, 0)?;
     if context != Some(kOfxImageEffectContextFilter) {
@@ -250,7 +248,7 @@ fn action_describe_in_context(
 
     for name in [c"Output", c"Source"] {
         let props = data.clip_define(descriptor, name)?;
-        let mut props_helper = data.make_property_set_helper(props);
+        let props_helper = data.make_property_set_helper(props);
 
         for (i, comp) in [
             kOfxImageComponentRGBA,
@@ -285,18 +283,18 @@ fn pixel_address<T>(
         return None;
     }
 
-    let x_offset = x - bounds.x1;
-    let y_offset = y - bounds.y1;
+    let x_offset = (x - bounds.x1) as isize;
+    let y_offset = (y - bounds.y1) as isize;
 
     let row_start_address =
-        unsafe { (base_address as *mut u8).offset((y_offset * row_bytes) as isize) as *mut T };
+        unsafe { (base_address as *mut u8).offset(y_offset * row_bytes as isize) as *mut T };
 
-    Some(unsafe { row_start_address.offset((x_offset * n_comps_per_pixel) as isize) })
+    Some(unsafe { row_start_address.offset(x_offset * n_comps_per_pixel as isize) })
 }
 
 fn pixel_processing<T>(
     max: T,
-    data: &mut SharedDataHelper,
+    data: &SharedDataHelper,
     instance: OfxImageEffectHandle,
     source_img: OfxPropertySetHandle,
     output_img: OfxPropertySetHandle,
@@ -306,7 +304,7 @@ fn pixel_processing<T>(
 where
     T: std::ops::Sub<Output = T> + Copy + Default,
 {
-    let mut output_img_helper = data.make_property_set_helper(output_img);
+    let output_img_helper = data.make_property_set_helper(output_img);
     let dst_row_bytes = output_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
     let dst_bounds = {
         let mut dst_bounds: [c_int; 4] = [0; 4];
@@ -315,10 +313,10 @@ where
     };
     let dst_ptr = output_img_helper.prop_get_pointer(kOfxImagePropData, 0)? as *mut T;
     if dst_ptr.is_null() {
-        return Err(OfxStat::kOfxStatErrBadIndex);
+        return Err(OfxStat::kOfxStatFailed);
     }
 
-    let mut source_img_helper = data.make_property_set_helper(source_img);
+    let source_img_helper = data.make_property_set_helper(source_img);
     let src_row_bytes = source_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
     let src_bounds = {
         let mut src_bounds: [c_int; 4] = [0; 4];
@@ -327,7 +325,7 @@ where
     };
     let src_ptr = source_img_helper.prop_get_pointer(kOfxImagePropData, 0)? as *mut T;
     if src_ptr.is_null() {
-        return Err(OfxStat::kOfxStatErrBadIndex);
+        return Err(OfxStat::kOfxStatFailed);
     }
 
     for y in render_window.y1..render_window.y2 {
@@ -338,7 +336,7 @@ where
                 .abort
                 .is_some_and(|abort| unsafe { abort(instance) } != 0)
         {
-            return Err(OfxStat::kOfxStatOK);
+            return Ok(());
         }
 
         let Some(dst_pix) = pixel_address(
@@ -349,7 +347,7 @@ where
             dst_row_bytes,
             n_comps,
         ) else {
-            continue;
+            return Err(OfxStat::kOfxStatFailed);
         };
         let mut dst_pix = dst_pix;
 
@@ -394,9 +392,9 @@ fn action_render(
     _out_args: OfxPropertySetHandle,
 ) -> OfxResult<()> {
     let data = shared_data_lockless()?;
-    let mut data = SharedDataHelper::try_new(&data)?;
+    let data = SharedDataHelper::try_new(&data)?;
 
-    let mut in_args_helper = data.make_property_set_helper(in_args);
+    let in_args_helper = data.make_property_set_helper(in_args);
 
     let time: OfxTime = in_args_helper.prop_get_double(kOfxPropTime, 0)?;
     let render_window = {
@@ -408,17 +406,17 @@ fn action_render(
     let output_clip = data.clip_get_handle(instance, c"Output")?;
     let source_clip = data.clip_get_handle(instance, c"Source")?;
 
-    let output_img = data.clip_get_image(output_clip, time, None)?;
-    let source_img = data.clip_get_image(source_clip, time, None)?;
+    let output_img_m = data.clip_get_image_managed(output_clip, time, None)?;
+    let source_img_m = data.clip_get_image_managed(source_clip, time, None)?;
 
     fn inner(
-        data: &mut SharedDataHelper,
+        data: &SharedDataHelper,
         instance: OfxImageEffectHandle,
         source_img: OfxPropertySetHandle,
         output_img: OfxPropertySetHandle,
         render_window: OfxRectI,
     ) -> OfxResult<()> {
-        let mut output_img_helper = data.make_property_set_helper(output_img);
+        let output_img_helper = data.make_property_set_helper(output_img);
 
         let components = output_img_helper.prop_get_string(kOfxImageEffectPropComponents, 0)?;
         let n_comps = match components {
@@ -463,10 +461,16 @@ fn action_render(
         Ok(())
     }
 
-    let result = inner(&mut data, instance, source_img, output_img, render_window);
+    let result = inner(
+        &data,
+        instance,
+        source_img_m.image_handle(),
+        output_img_m.image_handle(),
+        render_window,
+    );
 
-    data.clip_release_image(output_img)?;
-    data.clip_release_image(source_img)?;
+    drop(output_img_m);
+    drop(source_img_m);
 
     result
 }
