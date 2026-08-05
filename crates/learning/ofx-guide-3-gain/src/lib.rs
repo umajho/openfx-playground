@@ -319,8 +319,8 @@ fn action_destroy_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStat
 
 fn action_is_identity(
     effect: OfxImageEffectHandle,
-    in_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
-    out_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
+    in_args: OfxPropertySetHandle,
+    out_args: OfxPropertySetHandle,
 ) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
@@ -351,8 +351,8 @@ fn action_is_identity(
 
 fn action_render(
     instance: OfxImageEffectHandle,
-    in_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
-    _out_args: *mut openfx_bindings::bindings::OfxPropertySetStruct,
+    in_args: OfxPropertySetHandle,
+    _out_args: OfxPropertySetHandle,
 ) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
