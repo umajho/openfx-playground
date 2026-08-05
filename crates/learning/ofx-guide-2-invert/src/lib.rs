@@ -191,7 +191,10 @@ fn action_describe_in_context(
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
-    let in_args_helper = data.make_property_set_helper(in_args);
+    let property_suite_helper = data.property_suite_helper();
+    let image_effect_suite_helper = data.image_effect_suite_helper();
+
+    let in_args_helper = property_suite_helper.make_property_set_helper(in_args);
 
     let context = in_args_helper.prop_get_string(kOfxImageEffectPropContext, 0)?;
     if context != Some(kOfxImageEffectContextFilter) {
@@ -199,8 +202,8 @@ fn action_describe_in_context(
     }
 
     for name in [c"Output", c"Source"] {
-        let props = data.clip_define(descriptor, name)?;
-        let props_helper = data.make_property_set_helper(props);
+        let props = image_effect_suite_helper.clip_define(descriptor, name)?;
+        let props_helper = property_suite_helper.make_property_set_helper(props);
 
         for (i, comp) in [
             kOfxImageComponentRGBA,
@@ -256,7 +259,9 @@ fn pixel_processing<T>(
 where
     T: std::ops::Sub<Output = T> + Copy + Default,
 {
-    let output_img_helper = data.make_property_set_helper(output_img);
+    let property_suite_helper = data.property_suite_helper();
+
+    let output_img_helper = property_suite_helper.make_property_set_helper(output_img);
     let dst_row_bytes = output_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
     let dst_bounds = {
         let mut dst_bounds: [c_int; 4] = [0; 4];
@@ -268,7 +273,7 @@ where
         return Err(OfxStat::kOfxStatFailed);
     }
 
-    let source_img_helper = data.make_property_set_helper(source_img);
+    let source_img_helper = property_suite_helper.make_property_set_helper(source_img);
     let src_row_bytes = source_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
     let src_bounds = {
         let mut src_bounds: [c_int; 4] = [0; 4];
@@ -346,7 +351,10 @@ fn action_render(
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
-    let in_args_helper = data.make_property_set_helper(in_args);
+    let property_suite_helper = data.property_suite_helper();
+    let image_effect_suite_helper = data.image_effect_suite_helper();
+
+    let in_args_helper = property_suite_helper.make_property_set_helper(in_args);
 
     let time: OfxTime = in_args_helper.prop_get_double(kOfxPropTime, 0)?;
     let render_window = {
@@ -355,11 +363,11 @@ fn action_render(
         rect_i_from_array(&render_window)
     };
 
-    let output_clip = data.clip_get_handle(instance, c"Output")?;
-    let source_clip = data.clip_get_handle(instance, c"Source")?;
+    let output_clip = image_effect_suite_helper.clip_get_handle(instance, c"Output")?;
+    let source_clip = image_effect_suite_helper.clip_get_handle(instance, c"Source")?;
 
-    let output_img_m = data.clip_get_image_managed(output_clip, time, None)?;
-    let source_img_m = data.clip_get_image_managed(source_clip, time, None)?;
+    let output_img_m = image_effect_suite_helper.clip_get_image_managed(output_clip, time, None)?;
+    let source_img_m = image_effect_suite_helper.clip_get_image_managed(source_clip, time, None)?;
 
     fn inner(
         data: &SharedDataHelper,
@@ -368,7 +376,9 @@ fn action_render(
         output_img: OfxPropertySetHandle,
         render_window: OfxRectI,
     ) -> OfxResult<()> {
-        let output_img_helper = data.make_property_set_helper(output_img);
+        let property_suite_helper = data.property_suite_helper();
+
+        let output_img_helper = property_suite_helper.make_property_set_helper(output_img);
 
         let components = output_img_helper.prop_get_string(kOfxImageEffectPropComponents, 0)?;
         let n_comps = match components {

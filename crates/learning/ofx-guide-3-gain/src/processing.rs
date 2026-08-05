@@ -24,7 +24,9 @@ pub fn pixel_processing<T>(
 where
     T: std::ops::Sub<Output = T> + Copy + Default,
 {
-    let output_img_helper = data.make_property_set_helper(output_img);
+    let property_suite_helper = data.property_suite_helper();
+
+    let output_img_helper = property_suite_helper.make_property_set_helper(output_img);
     let dst_row_bytes = output_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
     let dst_bounds = {
         let mut dst_bounds: [c_int; 4] = [0; 4];
@@ -36,7 +38,7 @@ where
         return Err(OfxStat::kOfxStatFailed);
     }
 
-    let source_img_helper = data.make_property_set_helper(source_img);
+    let source_img_helper = property_suite_helper.make_property_set_helper(source_img);
     let src_row_bytes = source_img_helper.prop_get_int(kOfxImagePropRowBytes, 0)?;
     let src_bounds = {
         let mut src_bounds: [c_int; 4] = [0; 4];

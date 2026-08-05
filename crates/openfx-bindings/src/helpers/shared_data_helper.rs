@@ -1,8 +1,9 @@
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::bindings::{
-    OfxImageClipHandle, OfxImageEffectHandle, OfxParamHandle, OfxParamSetHandle,
-    OfxPropertySetHandle, OfxPropertySetStruct, OfxRectD, OfxResult, OfxStat, OfxTime,
+    OfxImageClipHandle, OfxImageEffectHandle, OfxImageEffectSuiteV1, OfxParamHandle,
+    OfxParamSetHandle, OfxPropertySetHandle, OfxPropertySetStruct, OfxPropertySuiteV1, OfxRectD,
+    OfxResult, OfxStat, OfxTime,
 };
 
 use super::SharedData;
@@ -20,36 +21,62 @@ impl<'data> SharedDataHelper<'data> {
         self.shared_data
     }
 
-    pub fn make_property_set_helper_for_image_effect<'helper>(
-        &'helper self,
-        handle: OfxImageEffectHandle,
-    ) -> OfxResult<PropertySetHelper<'helper, 'data>> {
-        let props = self.get_property_set(handle)?;
-
-        Ok(self.make_property_set_helper(props as OfxPropertySetHandle))
+    pub fn property_suite_helper(&self) -> PropertySuiteHelper<'data> {
+        PropertySuiteHelper {
+            property_suite: self.shared_data.property_suite,
+        }
     }
-
-    pub fn make_property_set_helper<'helper>(
-        &'helper self,
-        handle: OfxPropertySetHandle,
-    ) -> PropertySetHelper<'helper, 'data> {
-        PropertySetHelper {
-            shared_data_helper: self,
-            props: handle,
+    pub fn image_effect_suite_helper(&self) -> ImageEffectSuiteHelper<'data> {
+        ImageEffectSuiteHelper {
+            image_effect_suite: self.shared_data.image_effect_suite,
+        }
+    }
+    pub fn parameter_suite_helper(&self) -> ParameterSuiteHelper<'data> {
+        ParameterSuiteHelper {
+            parameter_suite: self.shared_data.parameter_suite,
         }
     }
 
-    fn get_property_set(&self, handle: OfxImageEffectHandle) -> OfxResult<OfxPropertySetHandle> {
-        let get_property_set = self
-            .shared_data
-            .image_effect_suite
-            .getPropertySet
-            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+    pub fn make_property_set_helper_for_image_effect(
+        &self,
+        handle: OfxImageEffectHandle,
+    ) -> OfxResult<PropertySetHelper<'data>> {
+        let props = self.image_effect_suite_helper().get_property_set(handle)?;
 
-        let mut props: *mut OfxPropertySetStruct = std::ptr::null_mut();
-        (unsafe { get_property_set(handle, &mut props) }).ofx_ok()?;
+        Ok(self.property_suite_helper().make_property_set_helper(props))
+    }
 
-        Ok(props as OfxPropertySetHandle)
+    pub fn make_param_set_helper_for_image_effect(
+        &self,
+        handle: OfxImageEffectHandle,
+    ) -> OfxResult<ParamSetHelper<'data>> {
+        let param_set = self.image_effect_suite_helper().get_param_set(handle)?;
+
+        Ok(self
+            .parameter_suite_helper()
+            .make_param_set_helper(param_set))
+    }
+}
+
+pub struct PropertySuiteHelper<'data> {
+    property_suite: &'data OfxPropertySuiteV1,
+}
+
+impl<'data> PropertySuiteHelper<'data> {
+    pub fn inner(&self) -> &OfxPropertySuiteV1 {
+        self.property_suite
+    }
+
+    pub fn make_property_set_helper(
+        &self,
+        handle: OfxPropertySetHandle,
+    ) -> PropertySetHelper<'data> {
+        PropertySetHelper {
+            property_suite_helper: PropertySuiteHelper {
+                property_suite: self.property_suite,
+            },
+            props: handle,
+        }
     }
 
     pub fn prop_set_string(
@@ -60,7 +87,6 @@ impl<'data> SharedDataHelper<'data> {
         value: &CStr,
     ) -> OfxResult<()> {
         let prop_set_string = self
-            .shared_data
             .property_suite
             .propSetString
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -75,7 +101,6 @@ impl<'data> SharedDataHelper<'data> {
         index: c_int,
     ) -> OfxResult<Option<&CStr>> {
         let prop_get_string = self
-            .shared_data
             .property_suite
             .propGetString
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -99,7 +124,6 @@ impl<'data> SharedDataHelper<'data> {
         value: c_int,
     ) -> OfxResult<()> {
         let prop_set_int = self
-            .shared_data
             .property_suite
             .propSetInt
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -114,7 +138,6 @@ impl<'data> SharedDataHelper<'data> {
         index: c_int,
     ) -> OfxResult<c_int> {
         let prop_get_int = self
-            .shared_data
             .property_suite
             .propGetInt
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -132,7 +155,6 @@ impl<'data> SharedDataHelper<'data> {
         values: &mut [c_int],
     ) -> OfxResult<()> {
         let prop_get_int_n = self
-            .shared_data
             .property_suite
             .propGetIntN
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -156,7 +178,6 @@ impl<'data> SharedDataHelper<'data> {
         value: f64,
     ) -> OfxResult<()> {
         let prop_set_double = self
-            .shared_data
             .property_suite
             .propSetDouble
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -171,7 +192,6 @@ impl<'data> SharedDataHelper<'data> {
         index: c_int,
     ) -> OfxResult<f64> {
         let prop_get_double = self
-            .shared_data
             .property_suite
             .propGetDouble
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -190,7 +210,6 @@ impl<'data> SharedDataHelper<'data> {
         value: *mut c_void,
     ) -> OfxResult<()> {
         let prop_set_pointer = self
-            .shared_data
             .property_suite
             .propSetPointer
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -205,7 +224,6 @@ impl<'data> SharedDataHelper<'data> {
         index: c_int,
     ) -> OfxResult<*mut c_void> {
         let prop_get_pointer = self
-            .shared_data
             .property_suite
             .propGetPointer
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -215,6 +233,89 @@ impl<'data> SharedDataHelper<'data> {
 
         Ok(value_ptr)
     }
+}
+
+pub struct PropertySetHelper<'data> {
+    property_suite_helper: PropertySuiteHelper<'data>,
+    props: OfxPropertySetHandle,
+}
+
+impl<'data> PropertySetHelper<'data> {
+    pub fn props(&self) -> OfxPropertySetHandle {
+        self.props
+    }
+
+    pub fn prop_set_string(&self, property: &CStr, index: c_int, value: &CStr) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_set_string(self.props, property, index, value)
+    }
+
+    pub fn prop_get_string(&self, property: &CStr, index: c_int) -> OfxResult<Option<&CStr>> {
+        self.property_suite_helper
+            .prop_get_string(self.props, property, index)
+    }
+
+    pub fn prop_set_int(&self, property: &CStr, index: c_int, value: c_int) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_set_int(self.props, property, index, value)
+    }
+
+    pub fn prop_get_int(&self, property: &CStr, index: c_int) -> OfxResult<c_int> {
+        self.property_suite_helper
+            .prop_get_int(self.props, property, index)
+    }
+
+    pub fn prop_get_int_n(&self, property: &CStr, values: &mut [c_int]) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_get_int_n(self.props, property, values)
+    }
+
+    pub fn prop_set_double(&self, property: &CStr, index: c_int, value: f64) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_set_double(self.props, property, index, value)
+    }
+
+    pub fn prop_get_double(&self, property: &CStr, index: c_int) -> OfxResult<f64> {
+        self.property_suite_helper
+            .prop_get_double(self.props, property, index)
+    }
+
+    pub fn prop_set_pointer(
+        &self,
+        property: &CStr,
+        index: c_int,
+        value: *mut c_void,
+    ) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_set_pointer(self.props, property, index, value)
+    }
+
+    pub fn prop_get_pointer(&self, property: &CStr, index: c_int) -> OfxResult<*mut c_void> {
+        self.property_suite_helper
+            .prop_get_pointer(self.props, property, index)
+    }
+}
+
+pub struct ImageEffectSuiteHelper<'data> {
+    image_effect_suite: &'data OfxImageEffectSuiteV1,
+}
+
+impl<'data> ImageEffectSuiteHelper<'data> {
+    pub fn inner(&self) -> &OfxImageEffectSuiteV1 {
+        self.image_effect_suite
+    }
+
+    fn get_property_set(&self, handle: OfxImageEffectHandle) -> OfxResult<OfxPropertySetHandle> {
+        let get_property_set = self
+            .image_effect_suite
+            .getPropertySet
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut props: *mut OfxPropertySetStruct = std::ptr::null_mut();
+        (unsafe { get_property_set(handle, &mut props) }).ofx_ok()?;
+
+        Ok(props as OfxPropertySetHandle)
+    }
 
     pub fn clip_define(
         &self,
@@ -222,7 +323,6 @@ impl<'data> SharedDataHelper<'data> {
         name: &CStr,
     ) -> OfxResult<OfxPropertySetHandle> {
         let clip_define = self
-            .shared_data
             .image_effect_suite
             .clipDefine
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -239,7 +339,6 @@ impl<'data> SharedDataHelper<'data> {
         name: &CStr,
     ) -> OfxResult<OfxImageClipHandle> {
         let clip_get_handle = self
-            .shared_data
             .image_effect_suite
             .clipGetHandle
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -251,6 +350,22 @@ impl<'data> SharedDataHelper<'data> {
         Ok(clip)
     }
 
+    pub fn clip_get_image_managed(
+        &self,
+        clip: OfxImageClipHandle,
+        time: OfxTime,
+        region: Option<*const OfxRectD>,
+    ) -> OfxResult<ClipImageManaged<'data>> {
+        let image_handle = self.clip_get_image_(clip, time, region)?;
+
+        Ok(ClipImageManaged {
+            image_effect_suite_helper: ImageEffectSuiteHelper {
+                image_effect_suite: self.image_effect_suite,
+            },
+            image_handle,
+        })
+    }
+
     /// Use [`Self::clip_get_image_managed`].
     pub fn clip_get_image_(
         &self,
@@ -259,7 +374,6 @@ impl<'data> SharedDataHelper<'data> {
         region: Option<*const OfxRectD>,
     ) -> OfxResult<OfxPropertySetHandle> {
         let clip_get_image = self
-            .shared_data
             .image_effect_suite
             .clipGetImage
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -271,25 +385,10 @@ impl<'data> SharedDataHelper<'data> {
         Ok(image)
     }
 
-    pub fn clip_get_image_managed<'helper>(
-        &'helper self,
-        clip: OfxImageClipHandle,
-        time: OfxTime,
-        region: Option<*const OfxRectD>,
-    ) -> OfxResult<ClipImageManaged<'helper, 'data>> {
-        let image_handle = self.clip_get_image_(clip, time, region)?;
-
-        Ok(ClipImageManaged {
-            shared_data_helper: self,
-            image_handle,
-        })
-    }
-
     /// Use [`Self::clip_get_image_managed`] to get a managed image that does
     /// not require calling this function manually to release it.
     pub fn clip_release_image_(&self, image_handle: OfxPropertySetHandle) -> OfxResult<()> {
         let clip_release_image = self
-            .shared_data
             .image_effect_suite
             .clipReleaseImage
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -302,7 +401,6 @@ impl<'data> SharedDataHelper<'data> {
         image_effect: OfxImageEffectHandle,
     ) -> OfxResult<OfxParamSetHandle> {
         let get_param_set = self
-            .shared_data
             .image_effect_suite
             .getParamSet
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -312,6 +410,48 @@ impl<'data> SharedDataHelper<'data> {
 
         Ok(param_set)
     }
+}
+
+pub struct ClipImageManaged<'data> {
+    image_effect_suite_helper: ImageEffectSuiteHelper<'data>,
+    image_handle: OfxPropertySetHandle,
+}
+
+impl<'data> ClipImageManaged<'data> {
+    /// ## Safety
+    ///
+    /// The caller must ensure that the returned `OfxPropertySetHandle` will not
+    /// be used after the `ClipImageManaged` instance is dropped.
+    pub fn image_handle(&self) -> OfxPropertySetHandle {
+        self.image_handle
+    }
+}
+
+impl<'data> Drop for ClipImageManaged<'data> {
+    fn drop(&mut self) {
+        let _ = self
+            .image_effect_suite_helper
+            .clip_release_image_(self.image_handle);
+    }
+}
+
+pub struct ParameterSuiteHelper<'data> {
+    parameter_suite: &'data crate::bindings::OfxParameterSuiteV1,
+}
+
+impl<'data> ParameterSuiteHelper<'data> {
+    pub fn inner(&self) -> &crate::bindings::OfxParameterSuiteV1 {
+        self.parameter_suite
+    }
+
+    pub fn make_param_set_helper(&self, handle: OfxParamSetHandle) -> ParamSetHelper<'data> {
+        ParamSetHelper {
+            parameter_suite_helper: ParameterSuiteHelper {
+                parameter_suite: self.parameter_suite,
+            },
+            param_set: handle,
+        }
+    }
 
     pub fn param_define(
         &self,
@@ -320,7 +460,6 @@ impl<'data> SharedDataHelper<'data> {
         name: &CStr,
     ) -> OfxResult<OfxPropertySetHandle> {
         let param_define = self
-            .shared_data
             .parameter_suite
             .paramDefine
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -338,7 +477,6 @@ impl<'data> SharedDataHelper<'data> {
         name: &CStr,
     ) -> OfxResult<OfxParamHandle> {
         let param_get_handle = self
-            .shared_data
             .parameter_suite
             .paramGetHandle
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -359,7 +497,6 @@ impl<'data> SharedDataHelper<'data> {
         time: OfxTime,
     ) -> OfxResult<T> {
         let param_get_value_at_time = self
-            .shared_data
             .parameter_suite
             .paramGetValueAtTime
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
@@ -387,82 +524,23 @@ impl<'data> SharedDataHelper<'data> {
     }
 }
 
-pub struct PropertySetHelper<'helper, 'data> {
-    shared_data_helper: &'helper SharedDataHelper<'data>,
-    props: OfxPropertySetHandle,
+pub struct ParamSetHelper<'data> {
+    parameter_suite_helper: ParameterSuiteHelper<'data>,
+    param_set: OfxParamSetHandle,
 }
 
-impl<'helper, 'data> PropertySetHelper<'helper, 'data> {
-    pub fn prop_set_string(&self, property: &CStr, index: c_int, value: &CStr) -> OfxResult<()> {
-        self.shared_data_helper
-            .prop_set_string(self.props, property, index, value)
+impl<'data> ParamSetHelper<'data> {
+    pub fn param_set(&self) -> OfxParamSetHandle {
+        self.param_set
     }
 
-    pub fn prop_get_string(&self, property: &CStr, index: c_int) -> OfxResult<Option<&CStr>> {
-        self.shared_data_helper
-            .prop_get_string(self.props, property, index)
+    pub fn param_define(&self, param_type: &CStr, name: &CStr) -> OfxResult<OfxPropertySetHandle> {
+        self.parameter_suite_helper
+            .param_define(self.param_set, param_type, name)
     }
 
-    pub fn prop_set_int(&self, property: &CStr, index: c_int, value: c_int) -> OfxResult<()> {
-        self.shared_data_helper
-            .prop_set_int(self.props, property, index, value)
-    }
-
-    pub fn prop_get_int(&self, property: &CStr, index: c_int) -> OfxResult<c_int> {
-        self.shared_data_helper
-            .prop_get_int(self.props, property, index)
-    }
-
-    pub fn prop_get_int_n(&self, property: &CStr, values: &mut [c_int]) -> OfxResult<()> {
-        self.shared_data_helper
-            .prop_get_int_n(self.props, property, values)
-    }
-
-    pub fn prop_set_double(&self, property: &CStr, index: c_int, value: f64) -> OfxResult<()> {
-        self.shared_data_helper
-            .prop_set_double(self.props, property, index, value)
-    }
-
-    pub fn prop_get_double(&self, property: &CStr, index: c_int) -> OfxResult<f64> {
-        self.shared_data_helper
-            .prop_get_double(self.props, property, index)
-    }
-
-    pub fn prop_set_pointer(
-        &self,
-        property: &CStr,
-        index: c_int,
-        value: *mut c_void,
-    ) -> OfxResult<()> {
-        self.shared_data_helper
-            .prop_set_pointer(self.props, property, index, value)
-    }
-
-    pub fn prop_get_pointer(&self, property: &CStr, index: c_int) -> OfxResult<*mut c_void> {
-        self.shared_data_helper
-            .prop_get_pointer(self.props, property, index)
-    }
-}
-
-pub struct ClipImageManaged<'helper, 'data> {
-    shared_data_helper: &'helper SharedDataHelper<'data>,
-    image_handle: OfxPropertySetHandle,
-}
-
-impl<'helper, 'data> ClipImageManaged<'helper, 'data> {
-    /// ## Safety
-    ///
-    /// The caller must ensure that the returned `OfxPropertySetHandle` will not
-    /// be used after the `ClipImageManaged` instance is dropped.
-    pub fn image_handle(&self) -> OfxPropertySetHandle {
-        self.image_handle
-    }
-}
-
-impl Drop for ClipImageManaged<'_, '_> {
-    fn drop(&mut self) {
-        let _ = self
-            .shared_data_helper
-            .clip_release_image_(self.image_handle);
+    pub fn param_get_handle(&self, name: &CStr) -> OfxResult<OfxParamHandle> {
+        self.parameter_suite_helper
+            .param_get_handle(self.param_set, name)
     }
 }

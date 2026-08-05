@@ -210,7 +210,10 @@ fn action_describe_in_context(
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
-    let in_args_helper = data.make_property_set_helper(in_args);
+    let property_suite_helper = data.property_suite_helper();
+    let image_effect_suite_helper = data.image_effect_suite_helper();
+
+    let in_args_helper = property_suite_helper.make_property_set_helper(in_args);
 
     let context = in_args_helper.prop_get_string(kOfxImageEffectPropContext, 0)?;
     if context != Some(kOfxImageEffectContextFilter) {
@@ -218,8 +221,8 @@ fn action_describe_in_context(
     }
 
     for name in [c"Output", c"Source"] {
-        let props = data.clip_define(descriptor, name)?;
-        let props_helper = data.make_property_set_helper(props);
+        let props = image_effect_suite_helper.clip_define(descriptor, name)?;
+        let props_helper = property_suite_helper.make_property_set_helper(props);
 
         for (i, comp) in [
             kOfxImageComponentRGBA,
@@ -237,11 +240,11 @@ fn action_describe_in_context(
         }
     }
 
-    let param_set = data.get_param_set(descriptor)?;
+    let param_set_helper = data.make_param_set_helper_for_image_effect(descriptor)?;
 
     {
-        let param_props = data.param_define(param_set, kOfxParamTypeDouble, GAIN_PARAM_NAME)?;
-        let param_props_helper = data.make_property_set_helper(param_props);
+        let param_props = param_set_helper.param_define(kOfxParamTypeDouble, GAIN_PARAM_NAME)?;
+        let param_props_helper = property_suite_helper.make_property_set_helper(param_props);
         param_props_helper.prop_set_string(kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeScale)?;
         param_props_helper.prop_set_double(kOfxParamPropDefault, 0, 1.0)?;
         param_props_helper.prop_set_double(kOfxParamPropMin, 0, 0.0)?;
@@ -257,8 +260,8 @@ fn action_describe_in_context(
 
     {
         let param_props =
-            data.param_define(param_set, kOfxParamTypeBoolean, APPLY_TO_ALPHA_PARAM_NAME)?;
-        let param_props_helper = data.make_property_set_helper(param_props);
+            param_set_helper.param_define(kOfxParamTypeBoolean, APPLY_TO_ALPHA_PARAM_NAME)?;
+        let param_props_helper = property_suite_helper.make_property_set_helper(param_props);
         param_props_helper.prop_set_int(kOfxParamPropDefault, 0, 0)?;
         param_props_helper.prop_set_string(kOfxPropLabel, 0, c"Apply to Alpha")?;
         param_props_helper.prop_set_string(
@@ -275,14 +278,16 @@ fn action_create_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatu
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
+    let image_effect_suite_helper = data.image_effect_suite_helper();
+
     let instance_helper = data.make_property_set_helper_for_image_effect(instance)?;
 
-    let source_clip = data.clip_get_handle(instance, c"Source")?;
-    let output_clip = data.clip_get_handle(instance, c"Output")?;
+    let source_clip = image_effect_suite_helper.clip_get_handle(instance, c"Source")?;
+    let output_clip = image_effect_suite_helper.clip_get_handle(instance, c"Output")?;
 
-    let param_set = data.get_param_set(instance)?;
-    let gain_param = data.param_get_handle(param_set, GAIN_PARAM_NAME)?;
-    let apply_to_alpha_param = data.param_get_handle(param_set, APPLY_TO_ALPHA_PARAM_NAME)?;
+    let param_set_helper = data.make_param_set_helper_for_image_effect(instance)?;
+    let gain_param = param_set_helper.param_get_handle(GAIN_PARAM_NAME)?;
+    let apply_to_alpha_param = param_set_helper.param_get_handle(APPLY_TO_ALPHA_PARAM_NAME)?;
 
     let my_data = MyInstanceData {
         source_clip,
@@ -320,6 +325,9 @@ fn action_is_identity(
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
+    let property_suite_helper = data.property_suite_helper();
+    let parameter_suite_helper = data.parameter_suite_helper();
+
     let instance_helper = data.make_property_set_helper_for_image_effect(effect)?;
     let my_data_ptr = instance_helper.prop_get_pointer(kOfxPropInstanceData, 0)?;
     if my_data_ptr.is_null() {
@@ -327,11 +335,11 @@ fn action_is_identity(
     }
     let my_data = unsafe { &*(my_data_ptr as *mut MyInstanceData) };
 
-    let in_args_helper = data.make_property_set_helper(in_args);
-    let out_args_helper = data.make_property_set_helper(out_args);
+    let in_args_helper = property_suite_helper.make_property_set_helper(in_args);
+    let out_args_helper = property_suite_helper.make_property_set_helper(out_args);
 
     let time = in_args_helper.prop_get_double(kOfxPropTime, 0)?;
-    let gain = data.param_get_value_at_time_double(my_data.gain_param, time)?;
+    let gain = parameter_suite_helper.param_get_value_at_time_double(my_data.gain_param, time)?;
 
     if gain - 1.0 < 0.000000001 {
         out_args_helper.prop_set_string(kOfxPropName, 0, c"Source")?;
@@ -349,7 +357,10 @@ fn action_render(
     let data = shared_data_lockless()?;
     let data = SharedDataHelper::try_new(&data)?;
 
-    let in_args_helper = data.make_property_set_helper(in_args);
+    let property_suite_helper = data.property_suite_helper();
+    let parameter_suite_helper = data.parameter_suite_helper();
+
+    let in_args_helper = property_suite_helper.make_property_set_helper(in_args);
 
     let time: OfxTime = in_args_helper.prop_get_double(kOfxPropTime, 0)?;
     let render_window = {
@@ -365,11 +376,16 @@ fn action_render(
     }
     let my_data = unsafe { &*(my_data_ptr as *mut MyInstanceData) };
 
-    let gain = data.param_get_value_at_time_double(my_data.gain_param, time)?;
-    let apply_to_alpha = data.param_get_value_at_time_int(my_data.apply_to_alpha_param, time)? != 0;
+    let gain = parameter_suite_helper.param_get_value_at_time_double(my_data.gain_param, time)?;
+    let apply_to_alpha = parameter_suite_helper
+        .param_get_value_at_time_int(my_data.apply_to_alpha_param, time)?
+        != 0;
 
-    let output_img_m = data.clip_get_image_managed(my_data.output_clip, time, None)?;
-    let source_img_m = data.clip_get_image_managed(my_data.source_clip, time, None)?;
+    let image_effect_suite_helper = data.image_effect_suite_helper();
+    let output_img_m =
+        image_effect_suite_helper.clip_get_image_managed(my_data.output_clip, time, None)?;
+    let source_img_m =
+        image_effect_suite_helper.clip_get_image_managed(my_data.source_clip, time, None)?;
 
     fn inner(
         gain: f64,
@@ -380,7 +396,9 @@ fn action_render(
         output_img: OfxPropertySetHandle,
         render_window: OfxRectI,
     ) -> OfxResult<()> {
-        let output_img_helper = data.make_property_set_helper(output_img);
+        let property_suite_helper = data.property_suite_helper();
+
+        let output_img_helper = property_suite_helper.make_property_set_helper(output_img);
 
         let components = output_img_helper.prop_get_string(kOfxImageEffectPropComponents, 0)?;
         let n_comps = match components {
