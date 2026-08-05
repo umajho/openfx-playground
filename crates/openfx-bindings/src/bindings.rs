@@ -11,7 +11,11 @@ pub struct OfxStatus(pub std::ffi::c_int);
 
 impl OfxStatus {
     pub fn ofx_ok(self) -> OfxResult<()> {
-        if self.0 == 0 { Ok(()) } else { Err(self) }
+        if self.0 == 0 {
+            Ok(())
+        } else {
+            Err(self)
+        }
     }
 }
 
@@ -68,4 +72,7 @@ pub mod OfxStat {
     pub const kOfxStatReplyDefault: OfxStatus = OfxStatus(14);
 }
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/generated/bindings.rs"
+));
