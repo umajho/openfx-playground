@@ -53,6 +53,7 @@ struct SharedData {
     supports_multiple_clip_depths: AtomicBool,
     /// Map of setting IDs to C-string-ified IDs, names, descriptions, and ID for the settings group, if the setting is
     /// a group. OpenFX says these need to have a static lifetime.
+    #[allow(clippy::type_complexity)]
     strings: HashMap<SettingID<NtscEffect>, (CString, CString, Option<CString>, Option<CString>)>,
     /// Map of setting IDs and their index in the menu to C-string-ified names and descriptions. OpenFX says these need
     /// to have a static lifetime.

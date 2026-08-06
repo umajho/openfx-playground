@@ -262,12 +262,12 @@ pub fn build(
         info_plist.to_file_xml(plugin_bundle_path.plus("Info.plist"))?;
         fs::copy(
             assets_dir.plus_iter(["macos_icon.png"]),
-            plugin_resources_path.plus(&format!("{}.png", icon_file_name)),
+            plugin_resources_path.plus(format!("{}.png", icon_file_name)),
         )?;
     } else {
         fs::copy(
             assets_dir.plus_iter(["icon.png"]),
-            plugin_resources_path.plus(&format!("{}.png", icon_file_name)),
+            plugin_resources_path.plus(format!("{}.png", icon_file_name)),
         )?;
     }
 

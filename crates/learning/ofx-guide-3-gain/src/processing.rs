@@ -8,6 +8,7 @@ use openfx_bindings::{
     helpers::shared_data_helper::SharedDataHelper,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn pixel_processing<T>(
     from_f64: fn(f64) -> T,
     into_f64: fn(T) -> f64,

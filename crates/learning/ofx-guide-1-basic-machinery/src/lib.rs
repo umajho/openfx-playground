@@ -1,7 +1,7 @@
 //! ## TODO
 //!
 //! - [ ] initialzing tracing subscriber (The fact this this is a dynamic
-//!       library should be taken into account.)
+//!   library should be taken into account.)
 
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
