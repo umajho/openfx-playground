@@ -1,6 +1,6 @@
 //! ## TODO
 //!
-//! - [ ] initialzing tracing subscriber (The fact this this is a dynamic
+//! - [ ] initialzing tracing subscriber (The fact that this is a dynamic
 //!   library should be taken into account.)
 
 mod processing;
@@ -180,11 +180,12 @@ fn action_describe(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
 
     descriptor.prop_set_string(kOfxPropLabel, 0, c"OFX Saturation Example")?;
     descriptor.prop_set_string(kOfxImageEffectPluginPropGrouping, 0, c"OFX Example")?;
-    descriptor.prop_set_string(
-        kOfxImageEffectPropSupportedContexts,
-        0,
-        kOfxImageEffectContextFilter,
-    )?;
+    for (i, context) in [kOfxImageEffectContextFilter, kOfxImageEffectContextGeneral]
+        .iter()
+        .enumerate()
+    {
+        descriptor.prop_set_string(kOfxImageEffectPropSupportedContexts, i as c_int, context)?;
+    }
 
     for (i, bp) in [kOfxBitDepthFloat, kOfxBitDepthShort, kOfxBitDepthByte]
         .iter()

@@ -72,8 +72,7 @@ where
                     for (i, c) in rgb.iter().enumerate() {
                         let value = (*c - average) * saturation + average;
                         let value = value.clamp(0.0, into_f64(max));
-                        let blended =
-                            blend(into_f64(unsafe { *src_pix.add(i) }), value, mask_amount);
+                        let blended = blend(rgb[i], value, mask_amount);
                         unsafe { *dst_pix.add(i) = from_f64(blended) };
                     }
 
