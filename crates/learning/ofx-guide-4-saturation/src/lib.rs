@@ -180,9 +180,13 @@ fn action_describe(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
 
     descriptor.prop_set_string(kOfxPropLabel, 0, c"OFX Saturation Example")?;
     descriptor.prop_set_string(kOfxImageEffectPluginPropGrouping, 0, c"OFX Example")?;
-    for (i, context) in [kOfxImageEffectContextFilter, kOfxImageEffectContextGeneral]
-        .iter()
-        .enumerate()
+    for (i, context) in [
+        kOfxImageEffectContextFilter,
+        // FIXME: not working in Natron.
+        kOfxImageEffectContextGeneral,
+    ]
+    .iter()
+    .enumerate()
     {
         descriptor.prop_set_string(kOfxImageEffectPropSupportedContexts, i as c_int, context)?;
     }
