@@ -1,3 +1,4 @@
+mod internal_utils;
 pub mod shared_data_helper;
 
 use std::ffi::{c_char, c_int, c_void};

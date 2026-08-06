@@ -366,8 +366,12 @@ fn action_render(
     let output_clip = image_effect_suite_helper.clip_get_handle(instance, c"Output")?;
     let source_clip = image_effect_suite_helper.clip_get_handle(instance, c"Source")?;
 
-    let output_img_m = image_effect_suite_helper.clip_get_image_managed(output_clip, time, None)?;
-    let source_img_m = image_effect_suite_helper.clip_get_image_managed(source_clip, time, None)?;
+    let Some(output_img_m) = data.make_clip_image_managed(output_clip, time, None)? else {
+        return Err(OfxStat::kOfxStatFailed);
+    };
+    let Some(source_img_m) = data.make_clip_image_managed(source_clip, time, None)? else {
+        return Err(OfxStat::kOfxStatFailed);
+    };
 
     fn inner(
         data: &SharedDataHelper,

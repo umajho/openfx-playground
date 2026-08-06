@@ -5,10 +5,16 @@
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
-use crate::bindings::{
-    OfxImageClipHandle, OfxImageEffectHandle, OfxImageEffectSuiteV1, OfxParamHandle,
-    OfxParamSetHandle, OfxPropertySetHandle, OfxPropertySetStruct, OfxPropertySuiteV1, OfxRectD,
-    OfxResult, OfxStat, OfxTime,
+use crate::{
+    bindings::{
+        kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort, kOfxImageComponentAlpha,
+        kOfxImageComponentRGB, kOfxImageComponentRGBA, kOfxImageEffectPropComponents,
+        kOfxImageEffectPropPixelDepth, kOfxImagePropBounds, kOfxImagePropData,
+        kOfxImagePropRowBytes, OfxImageClipHandle, OfxImageEffectHandle, OfxImageEffectSuiteV1,
+        OfxParamHandle, OfxParamSetHandle, OfxPropertySetHandle, OfxPropertySetStruct,
+        OfxPropertySuiteV1, OfxRectD, OfxRectI, OfxResult, OfxStat, OfxTime,
+    },
+    helpers::internal_utils::rect_i_from_array,
 };
 
 use super::SharedData;
@@ -60,6 +66,19 @@ impl<'data> SharedDataHelper<'data> {
         Ok(self
             .parameter_suite_helper()
             .make_param_set_helper(param_set))
+    }
+
+    pub fn make_clip_image_managed(
+        &self,
+        clip: OfxImageClipHandle,
+        time: OfxTime,
+        region: Option<*const OfxRectD>,
+    ) -> OfxResult<Option<ClipImageManaged<'data>>> {
+        let image_handle = self
+            .image_effect_suite_helper()
+            .clip_get_image(clip, time, region)?;
+
+        ClipImageManaged::try_new(self, image_handle)
     }
 }
 
@@ -355,24 +374,8 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         Ok(clip)
     }
 
-    pub fn clip_get_image_managed(
-        &self,
-        clip: OfxImageClipHandle,
-        time: OfxTime,
-        region: Option<*const OfxRectD>,
-    ) -> OfxResult<ClipImageManaged<'data>> {
-        let image_handle = self.clip_get_image_(clip, time, region)?;
-
-        Ok(ClipImageManaged {
-            image_effect_suite_helper: ImageEffectSuiteHelper {
-                image_effect_suite: self.image_effect_suite,
-            },
-            image_handle,
-        })
-    }
-
     /// Use [`Self::clip_get_image_managed`].
-    pub fn clip_get_image_(
+    pub fn clip_get_image(
         &self,
         clip: OfxImageClipHandle,
         time: OfxTime,
@@ -420,15 +423,122 @@ impl<'data> ImageEffectSuiteHelper<'data> {
 pub struct ClipImageManaged<'data> {
     image_effect_suite_helper: ImageEffectSuiteHelper<'data>,
     image_handle: OfxPropertySetHandle,
+
+    n_comps: c_int,
+    pixel_depth: BitDepth,
+    row_bytes: c_int,
+    bounds: OfxRectI,
+    data_ptr: *mut c_void,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BitDepth {
+    Byte,
+    Short,
+    Float,
 }
 
 impl<'data> ClipImageManaged<'data> {
+    fn try_new(
+        shared_data_helper: &SharedDataHelper<'data>,
+        image_handle: OfxPropertySetHandle,
+    ) -> OfxResult<Option<Self>> {
+        let s_prop = shared_data_helper.property_suite_helper();
+
+        let props = s_prop.make_property_set_helper(image_handle);
+
+        let data_ptr = props.prop_get_pointer(kOfxImagePropData, 0)?;
+        if data_ptr.is_null() {
+            return Ok(None);
+        }
+
+        let n_comps = {
+            let components = props.prop_get_string(kOfxImageEffectPropComponents, 0)?;
+            match components {
+                Some(c) if c == kOfxImageComponentRGBA => 4,
+                Some(c) if c == kOfxImageComponentRGB => 3,
+                Some(c) if c == kOfxImageComponentAlpha => 1,
+                _ => 0,
+            }
+        };
+        let pixel_depth = {
+            let pixel_depth = props.prop_get_string(kOfxImageEffectPropPixelDepth, 0)?;
+            match true {
+                _ if pixel_depth == Some(kOfxBitDepthByte) => BitDepth::Byte,
+                _ if pixel_depth == Some(kOfxBitDepthShort) => BitDepth::Short,
+                _ if pixel_depth == Some(kOfxBitDepthFloat) => BitDepth::Float,
+                _ => return Err(OfxStat::kOfxStatErrUnsupported),
+            }
+        };
+        let row_bytes = props.prop_get_int(kOfxImagePropRowBytes, 0)?;
+        let bounds = {
+            let mut bounds: [c_int; 4] = [0; 4];
+            props.prop_get_int_n(kOfxImagePropBounds, &mut bounds)?;
+            rect_i_from_array(&bounds)
+        };
+
+        Ok(Some(Self {
+            image_effect_suite_helper: shared_data_helper.image_effect_suite_helper(),
+            image_handle,
+
+            n_comps,
+            pixel_depth,
+            row_bytes,
+            bounds,
+            data_ptr,
+        }))
+    }
+
     /// ## Safety
     ///
     /// The caller must ensure that the returned `OfxPropertySetHandle` will not
     /// be used after the `ClipImageManaged` instance is dropped.
     pub fn image_handle(&self) -> OfxPropertySetHandle {
         self.image_handle
+    }
+
+    pub fn n_comps(&self) -> c_int {
+        self.n_comps
+    }
+    pub fn pixel_depth(&self) -> BitDepth {
+        self.pixel_depth
+    }
+    pub fn bytes_per_component(&self) -> c_int {
+        match self.pixel_depth {
+            BitDepth::Byte => 1,
+            BitDepth::Short => 2,
+            BitDepth::Float => 4,
+        }
+    }
+    pub fn bytes_per_pixel(&self) -> c_int {
+        self.bytes_per_component() * self.n_comps
+    }
+    pub fn row_bytes(&self) -> c_int {
+        self.row_bytes
+    }
+    pub fn bounds(&self) -> OfxRectI {
+        self.bounds
+    }
+    pub fn data_ptr(&self) -> *mut c_void {
+        self.data_ptr
+    }
+
+    pub fn raw_address(&self, x: c_int, y: c_int) -> Option<*mut c_void> {
+        if x < self.bounds.x1 || x >= self.bounds.x2 || y < self.bounds.y1 || y >= self.bounds.y2 {
+            return None;
+        }
+
+        let x_offset = x - self.bounds.x1;
+        let y_offset = y - self.bounds.y1;
+
+        let row_start = unsafe {
+            (self.data_ptr as *mut u8).offset(y_offset as isize * self.row_bytes as isize)
+        };
+
+        Some(unsafe {
+            row_start.offset(x_offset as isize * self.bytes_per_pixel() as isize) as *mut c_void
+        })
     }
 }
 
