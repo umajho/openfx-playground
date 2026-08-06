@@ -1,3 +1,8 @@
+//! Some functions in this module that are not marked as `unsafe` may actually
+//! be unsafe. (FIXME)
+
+#![allow(clippy::not_unsafe_ptr_arg_deref)] // TODO: reconsider this.
+
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::bindings::{
