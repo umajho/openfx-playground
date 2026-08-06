@@ -22,7 +22,7 @@ pub fn pixel_processing<T>(
     n_comps: c_int,
 ) -> OfxResult<()>
 where
-    T: std::ops::Sub<Output = T> + Copy + Default,
+    T: Copy + Default,
 {
     let property_suite_helper = data.property_suite_helper();
 

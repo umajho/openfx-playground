@@ -241,7 +241,7 @@ fn action_describe_in_context(
         param_props.prop_set_double(kOfxParamPropDefault, 0, 1.0)?;
         param_props.prop_set_double(kOfxParamPropMin, 0, 0.0)?;
         param_props.prop_set_double(kOfxParamPropDisplayMin, 0, 0.0)?;
-        param_props.prop_set_double(kOfxParamPropDisplayMax, 0, 1.0)?;
+        param_props.prop_set_double(kOfxParamPropDisplayMax, 0, 10.0)?;
         param_props.prop_set_string(kOfxPropLabel, 0, c"Gain")?;
         param_props.prop_set_string(kOfxParamPropHint, 0, c"How much to multiply the image by.")?;
     }
@@ -251,7 +251,7 @@ fn action_describe_in_context(
             param_set.param_define(kOfxParamTypeBoolean, APPLY_TO_ALPHA_PARAM_NAME)?;
         let param_props = s_prop.make_property_set_helper(param_props);
         param_props.prop_set_int(kOfxParamPropDefault, 0, 0)?;
-        param_props.prop_set_string(kOfxPropLabel, 0, c"Apply to Alpha")?;
+        param_props.prop_set_string(kOfxPropLabel, 0, c"Apply To Alpha")?;
         param_props.prop_set_string(
             kOfxParamPropHint,
             0,
@@ -285,9 +285,13 @@ fn action_create_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatu
     };
     let my_data_ptr = Box::into_raw(Box::new(my_data)) as *mut c_void;
 
-    instance_props.prop_set_pointer(kOfxPropInstanceData, 0, my_data_ptr)?;
-
-    Ok(())
+    match instance_props.prop_set_pointer(kOfxPropInstanceData, 0, my_data_ptr) {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            drop(unsafe { Box::from_raw(my_data_ptr as *mut MyInstanceData) });
+            Err(err)
+        }
+    }
 }
 
 fn action_destroy_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatus> {
@@ -321,7 +325,7 @@ fn action_is_identity(
     if my_data_ptr.is_null() {
         return Err(OfxStat::kOfxStatErrFatal);
     }
-    let my_data = unsafe { &*(my_data_ptr as *mut MyInstanceData) };
+    let my_data = unsafe { &*(my_data_ptr as *const MyInstanceData) };
 
     let in_args = s_prop.make_property_set_helper(in_args);
     let out_args = s_prop.make_property_set_helper(out_args);
@@ -329,7 +333,7 @@ fn action_is_identity(
     let time = in_args.prop_get_double(kOfxPropTime, 0)?;
     let gain = s_param.param_get_value_at_time_double(my_data.gain_param, time)?;
 
-    if gain - 1.0 < 0.000000001 {
+    if (gain - 1.0).abs() < 0.000000001 {
         out_args.prop_set_string(kOfxPropName, 0, c"Source")?;
         Ok(())
     } else {
@@ -363,7 +367,7 @@ fn action_render(
     if my_data_ptr.is_null() {
         return Err(OfxStat::kOfxStatErrFatal);
     }
-    let my_data = unsafe { &*(my_data_ptr as *mut MyInstanceData) };
+    let my_data = unsafe { &*(my_data_ptr as *const MyInstanceData) };
 
     let gain = s_param.param_get_value_at_time_double(my_data.gain_param, time)?;
     let apply_to_alpha =
