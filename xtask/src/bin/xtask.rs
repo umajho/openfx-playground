@@ -10,6 +10,7 @@ use xtask::learning_ofx_guide_1_build_plugin;
 use xtask::learning_ofx_guide_2_build_plugin;
 use xtask::learning_ofx_guide_3_build_plugin;
 use xtask::learning_ofx_guide_4_build_plugin;
+use xtask::learning_ofx_guide_5_build_plugin;
 
 fn main() {
     let cmd = clap::Command::new("xtask")
@@ -18,7 +19,8 @@ fn main() {
         .subcommand(learning_ofx_guide_1_build_plugin::command())
         .subcommand(learning_ofx_guide_2_build_plugin::command())
         .subcommand(learning_ofx_guide_3_build_plugin::command())
-        .subcommand(learning_ofx_guide_4_build_plugin::command());
+        .subcommand(learning_ofx_guide_4_build_plugin::command())
+        .subcommand(learning_ofx_guide_5_build_plugin::command());
 
     let matches = cmd.get_matches();
 
@@ -39,6 +41,9 @@ fn main() {
         }
         "learning-ofx-guide-4-build-plugin" => {
             learning_ofx_guide_4_build_plugin::main(args).unwrap();
+        }
+        "learning-ofx-guide-5-build-plugin" => {
+            learning_ofx_guide_5_build_plugin::main(args).unwrap();
         }
         _ => {
             println!("Invalid xtask: {task}");

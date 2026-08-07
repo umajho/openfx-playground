@@ -4,7 +4,7 @@ members = [
   "crates/learning/ntsc-openfx",
   "crates/learning/ofx-guide-1-basic-machinery",
   "crates/learning/ofx-guide-2-invert",
-  "crates/learning/ofx-guide-3-gain", "crates/learning/ofx-guide-4-saturation",
+  "crates/learning/ofx-guide-3-gain", "crates/learning/ofx-guide-4-saturation", "crates/learning/ofx-guide-5-circle",
   "crates/openfx-bindings",
   "xtask",
 ]

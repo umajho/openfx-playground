@@ -1,3 +1,5 @@
+#![feature(decl_macro)]
+
 pub mod bindings;
 pub mod helpers;
 

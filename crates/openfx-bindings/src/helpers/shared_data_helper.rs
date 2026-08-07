@@ -10,9 +10,10 @@ use crate::{
         kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort, kOfxImageComponentAlpha,
         kOfxImageComponentRGB, kOfxImageComponentRGBA, kOfxImageEffectPropComponents,
         kOfxImageEffectPropPixelDepth, kOfxImagePropBounds, kOfxImagePropData,
-        kOfxImagePropRowBytes, OfxImageClipHandle, OfxImageEffectHandle, OfxImageEffectSuiteV1,
-        OfxParamHandle, OfxParamSetHandle, OfxPropertySetHandle, OfxPropertySetStruct,
-        OfxPropertySuiteV1, OfxRectD, OfxRectI, OfxResult, OfxStat, OfxTime,
+        kOfxImagePropPixelAspectRatio, kOfxImagePropRowBytes, kOfxPropInstanceData,
+        OfxImageClipHandle, OfxImageEffectHandle, OfxImageEffectSuiteV1, OfxParamHandle,
+        OfxParamSetHandle, OfxPropertySetHandle, OfxPropertySetStruct, OfxPropertySuiteV1,
+        OfxRectD, OfxRectI, OfxResult, OfxStat, OfxTime,
     },
     helpers::internal_utils::rect_i_from_array,
 };
@@ -20,15 +21,15 @@ use crate::{
 use super::SharedData;
 
 pub struct SharedDataHelper<'data> {
-    shared_data: &'data SharedData<'data>,
+    shared_data: &'data SharedData<'static>,
 }
 
 impl<'data> SharedDataHelper<'data> {
-    pub fn try_new(shared_data: &'data SharedData<'data>) -> OfxResult<Self> {
+    pub fn try_new(shared_data: &'data SharedData<'static>) -> OfxResult<Self> {
         Ok(Self { shared_data })
     }
 
-    pub fn inner(&self) -> &SharedData<'data> {
+    pub fn inner(&self) -> &SharedData<'static> {
         self.shared_data
     }
 
@@ -48,6 +49,18 @@ impl<'data> SharedDataHelper<'data> {
         }
     }
 
+    /// ## Safety
+    ///
+    /// The caller must ensure that the type `T` is correct.
+    pub unsafe fn get_instance_data<T>(&self, effect: OfxImageEffectHandle) -> OfxResult<&T> {
+        let instance_props = self.make_property_set_helper_for_image_effect(effect)?;
+        let instance_data_ptr = instance_props.prop_get_pointer(kOfxPropInstanceData, 0)?;
+        if instance_data_ptr.is_null() {
+            return Err(OfxStat::kOfxStatErrFatal);
+        }
+        Ok(unsafe { &*(instance_data_ptr as *const T) })
+    }
+
     pub fn make_property_set_helper_for_image_effect(
         &self,
         handle: OfxImageEffectHandle,
@@ -55,6 +68,12 @@ impl<'data> SharedDataHelper<'data> {
         let props = self.image_effect_suite_helper().get_property_set(handle)?;
 
         Ok(self.property_suite_helper().make_property_set_helper(props))
+    }
+
+    pub fn make_property_set_helper_for_host(&self) -> OfxResult<PropertySetHelper<'data>> {
+        let host = self.shared_data.host_struct.host as *const _ as *mut _;
+
+        Ok(self.property_suite_helper().make_property_set_helper(host))
     }
 
     pub fn make_param_set_helper_for_image_effect(
@@ -116,6 +135,28 @@ impl<'data> PropertySuiteHelper<'data> {
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         (unsafe { prop_set_string(handle, property.as_ptr(), index, value.as_ptr()) }).ofx_ok()
+    }
+
+    pub fn prop_set_string_n(
+        &self,
+        handle: OfxPropertySetHandle,
+        property: &CStr,
+        values: &[*const c_char],
+    ) -> OfxResult<()> {
+        let prop_set_string_n = self
+            .property_suite
+            .propSetStringN
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        (unsafe {
+            prop_set_string_n(
+                handle,
+                property.as_ptr(),
+                values.len() as c_int,
+                values.as_ptr(),
+            )
+        })
+        .ofx_ok()
     }
 
     pub fn prop_get_string(
@@ -209,6 +250,28 @@ impl<'data> PropertySuiteHelper<'data> {
         (unsafe { prop_set_double(handle, property.as_ptr(), index, value) }).ofx_ok()
     }
 
+    pub fn prop_set_double_n(
+        &self,
+        handle: OfxPropertySetHandle,
+        property: &CStr,
+        values: &[f64],
+    ) -> OfxResult<()> {
+        let prop_set_double_n = self
+            .property_suite
+            .propSetDoubleN
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        (unsafe {
+            prop_set_double_n(
+                handle,
+                property.as_ptr(),
+                values.len() as c_int,
+                values.as_ptr(),
+            )
+        })
+        .ofx_ok()
+    }
+
     pub fn prop_get_double(
         &self,
         handle: OfxPropertySetHandle,
@@ -224,6 +287,28 @@ impl<'data> PropertySuiteHelper<'data> {
         (unsafe { prop_get_double(handle, property.as_ptr(), index, &mut value) }).ofx_ok()?;
 
         Ok(value)
+    }
+
+    pub fn prop_get_double_n(
+        &self,
+        handle: OfxPropertySetHandle,
+        property: &CStr,
+        values: &mut [f64],
+    ) -> OfxResult<()> {
+        let prop_get_double_n = self
+            .property_suite
+            .propGetDoubleN
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        (unsafe {
+            prop_get_double_n(
+                handle,
+                property.as_ptr(),
+                values.len() as c_int,
+                values.as_mut_ptr(),
+            )
+        })
+        .ofx_ok()
     }
 
     pub fn prop_set_pointer(
@@ -257,6 +342,22 @@ impl<'data> PropertySuiteHelper<'data> {
 
         Ok(value_ptr)
     }
+
+    pub fn prop_get_dimension(
+        &self,
+        handle: OfxPropertySetHandle,
+        property: &CStr,
+    ) -> OfxResult<c_int> {
+        let prop_get_dimension = self
+            .property_suite
+            .propGetDimension
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut count: c_int = 0;
+        (unsafe { prop_get_dimension(handle, property.as_ptr(), &mut count) }).ofx_ok()?;
+
+        Ok(count)
+    }
 }
 
 pub struct PropertySetHelper<'data> {
@@ -272,6 +373,11 @@ impl<'data> PropertySetHelper<'data> {
     pub fn prop_set_string(&self, property: &CStr, index: c_int, value: &CStr) -> OfxResult<()> {
         self.property_suite_helper
             .prop_set_string(self.props, property, index, value)
+    }
+
+    pub fn prop_set_string_n(&self, property: &CStr, values: &[*const c_char]) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_set_string_n(self.props, property, values)
     }
 
     pub fn prop_get_string(&self, property: &CStr, index: c_int) -> OfxResult<Option<&CStr>> {
@@ -299,9 +405,19 @@ impl<'data> PropertySetHelper<'data> {
             .prop_set_double(self.props, property, index, value)
     }
 
+    pub fn prop_set_double_n(&self, property: &CStr, values: &[f64]) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_set_double_n(self.props, property, values)
+    }
+
     pub fn prop_get_double(&self, property: &CStr, index: c_int) -> OfxResult<f64> {
         self.property_suite_helper
             .prop_get_double(self.props, property, index)
+    }
+
+    pub fn prop_get_double_n(&self, property: &CStr, values: &mut [f64]) -> OfxResult<()> {
+        self.property_suite_helper
+            .prop_get_double_n(self.props, property, values)
     }
 
     pub fn prop_set_pointer(
@@ -317,6 +433,11 @@ impl<'data> PropertySetHelper<'data> {
     pub fn prop_get_pointer(&self, property: &CStr, index: c_int) -> OfxResult<*mut c_void> {
         self.property_suite_helper
             .prop_get_pointer(self.props, property, index)
+    }
+
+    pub fn prop_get_dimension(&self, property: &CStr) -> OfxResult<c_int> {
+        self.property_suite_helper
+            .prop_get_dimension(self.props, property)
     }
 }
 
@@ -418,6 +539,27 @@ impl<'data> ImageEffectSuiteHelper<'data> {
 
         Ok(param_set)
     }
+
+    pub fn clip_get_region_of_definition(
+        &self,
+        clip: OfxImageClipHandle,
+        time: OfxTime,
+    ) -> OfxResult<OfxRectD> {
+        let clip_get_region_of_definition = self
+            .image_effect_suite
+            .clipGetRegionOfDefinition
+            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
+
+        let mut bounds: OfxRectD = OfxRectD {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 0.0,
+            y2: 0.0,
+        };
+        (unsafe { clip_get_region_of_definition(clip, time, &mut bounds) }).ofx_ok()?;
+
+        Ok(bounds)
+    }
 }
 
 pub struct ClipImageManaged<'data> {
@@ -428,6 +570,7 @@ pub struct ClipImageManaged<'data> {
     pixel_depth: BitDepth,
     row_bytes: c_int,
     bounds: OfxRectI,
+    pixel_aspect_ratio: f64,
     data_ptr: *mut c_void,
 }
 
@@ -477,6 +620,7 @@ impl<'data> ClipImageManaged<'data> {
             props.prop_get_int_n(kOfxImagePropBounds, &mut bounds)?;
             rect_i_from_array(&bounds)
         };
+        let pixel_aspect_ratio = props.prop_get_double(kOfxImagePropPixelAspectRatio, 0)?;
 
         Ok(Some(Self {
             image_effect_suite_helper: shared_data_helper.image_effect_suite_helper(),
@@ -486,6 +630,7 @@ impl<'data> ClipImageManaged<'data> {
             pixel_depth,
             row_bytes,
             bounds,
+            pixel_aspect_ratio,
             data_ptr,
         }))
     }
@@ -519,6 +664,9 @@ impl<'data> ClipImageManaged<'data> {
     }
     pub fn bounds(&self) -> OfxRectI {
         self.bounds
+    }
+    pub fn pixel_aspect_ratio(&self) -> f64 {
+        self.pixel_aspect_ratio
     }
     pub fn data_ptr(&self) -> *mut c_void {
         self.data_ptr
@@ -611,14 +759,8 @@ impl<'data> ParameterSuiteHelper<'data> {
         param_handle: OfxParamHandle,
         time: OfxTime,
     ) -> OfxResult<T> {
-        let param_get_value_at_time = self
-            .parameter_suite
-            .paramGetValueAtTime
-            .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
-
         let mut value: T = unsafe { std::mem::zeroed() };
-        (unsafe { param_get_value_at_time(param_handle, time, &mut value) }).ofx_ok()?;
-
+        param_get_value_at_time!(self, param_handle, time, &mut value);
         Ok(value)
     }
 
@@ -636,6 +778,25 @@ impl<'data> ParameterSuiteHelper<'data> {
         time: OfxTime,
     ) -> OfxResult<c_int> {
         self.param_get_value_at_time(param_handle, time)
+    }
+}
+
+/// FIXME: should give back `OfxResult` instead of using `?` internally. This
+/// might require a proc macro for defining a variadic inner function.
+pub macro param_get_value_at_time(
+    $parameter_suite_helper:expr,
+    $param_handle:expr,
+    $time:expr,
+    $(&mut $value:ident),+ $(,)?
+) {
+    {
+        let param_get_value_at_time = $parameter_suite_helper
+            .inner()
+            .paramGetValueAtTime
+            .ok_or($crate::bindings::OfxStat::kOfxStatErrMissingHostFeature)?;
+        let time = $time;
+        #[allow(clippy::macro_metavars_in_unsafe)]
+        unsafe { param_get_value_at_time($param_handle, time, $(&mut $value),+).ofx_ok()? }
     }
 }
 

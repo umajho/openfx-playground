@@ -50,7 +50,7 @@ static EFFECT_PLUGIN_STRUCT: OfxPlugin = OfxPlugin {
     mainEntry: Some(main_entry),
 };
 
-static HOST_STRUCT: OnceLock<SaferHostStruct<'static>> = OnceLock::new();
+static HOST_STRUCT: OnceLock<SaferHostStruct> = OnceLock::new();
 
 static SHARED_DATA: Mutex<Option<SharedData<'static>>> = Mutex::new(None);
 
