@@ -1,0 +1,16 @@
+[package]
+name = "messing-1-inspect-info"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+openfx-bindings.workspace = true
+tracing.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true

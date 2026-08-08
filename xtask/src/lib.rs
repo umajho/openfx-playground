@@ -5,4 +5,5 @@ pub mod learning_ofx_guide_2_build_plugin;
 pub mod learning_ofx_guide_3_build_plugin;
 pub mod learning_ofx_guide_4_build_plugin;
 pub mod learning_ofx_guide_5_build_plugin;
+pub mod messing_1_build_plugin;
 pub mod util;
