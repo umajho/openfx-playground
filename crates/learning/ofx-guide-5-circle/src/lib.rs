@@ -423,6 +423,16 @@ fn action_get_region_of_definition(
 
     let time = in_args.prop_get_double(kOfxPropTime, 0)?;
 
+    let growing_rod = if let Some(grow_rod_param) = instance_data.grow_rod_param {
+        s_param.param_get_value_at_time_int(grow_rod_param, time)? != 0
+    } else {
+        false
+    };
+
+    if !growing_rod {
+        return Err(OfxStat::kOfxStatReplyDefault);
+    }
+
     let radius = s_param.param_get_value_at_time_double(instance_data.radius_param, time)?;
     let mut centre_x = 0.0;
     let mut centre_y = 0.0;
