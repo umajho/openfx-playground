@@ -2,12 +2,6 @@
 //!
 //! - [ ] initialzing tracing subscriber (The fact that this is a dynamic
 //!   library should be taken into account.)
-//!
-//! ## FIXME
-//!
-//! This only works in Natron. In Davinci Resolve, it reports: “No parameter is
-//! exposed to user or OFX Plugin [org.openeffects:circleexampleplugin] is not
-//! available.”
 
 mod processing;
 
@@ -202,8 +196,10 @@ fn action_load() -> OfxResult<()> {
                 return Err(OfxStat::kOfxStatErrMissingHostFeature);
             }
 
-            let host_supports_multi_res =
-                host_props.prop_get_int(kOfxImageEffectPropSupportsMultiResolution, 0)? == 1;
+            let host_supports_multi_res = host_props
+                .prop_get_int(kOfxImageEffectPropSupportsMultiResolution, 0)
+                .unwrap_or_default()
+                == 1;
 
             AdditionalSharedData {
                 api_version,
@@ -294,11 +290,16 @@ fn action_describe_in_context(
         let param_props = param_set.param_define(kOfxParamTypeDouble, RADIUS_PARAM_NAME)?;
         let param_props = s_prop.make_property_set_helper(param_props);
         param_props.prop_set_string(kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeX)?;
-        param_props.prop_set_string(
-            kOfxParamPropDefaultCoordinateSystem,
-            0,
-            kOfxParamCoordinatesNormalised,
-        )?;
+        // Not supported by DaVinci Resolve. To make the plugin work there, we
+        // ignore the return value here. TODO: Calculate the default value in
+        // canonical coordinate if this fails.
+        param_props
+            .prop_set_string(
+                kOfxParamPropDefaultCoordinateSystem,
+                0,
+                kOfxParamCoordinatesNormalised,
+            )
+            .ok();
         param_props.prop_set_double(kOfxParamPropDefault, 0, 0.25)?;
         param_props.prop_set_double(kOfxParamPropMin, 0, 0.0)?;
         param_props.prop_set_double(kOfxParamPropDisplayMin, 0, 0.0)?;
@@ -311,11 +312,14 @@ fn action_describe_in_context(
         let param_props = param_set.param_define(kOfxParamTypeDouble2D, CENTRE_PARAM_NAME)?;
         let param_props = s_prop.make_property_set_helper(param_props);
         param_props.prop_set_string(kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeXYAbsolute)?;
-        param_props.prop_set_string(
-            kOfxParamPropDefaultCoordinateSystem,
-            0,
-            kOfxParamCoordinatesNormalised,
-        )?;
+        // Not supported by DaVinci Resolve. See above.
+        param_props
+            .prop_set_string(
+                kOfxParamPropDefaultCoordinateSystem,
+                0,
+                kOfxParamCoordinatesNormalised,
+            )
+            .ok();
         param_props.prop_set_double_n(kOfxParamPropDefault, &[0.5, 0.5])?;
         param_props.prop_set_string(kOfxPropLabel, 0, c"Centre")?;
         param_props.prop_set_string(kOfxParamPropHint, 0, c"The centre of the circle.")?;
