@@ -1,8 +1,3 @@
-//! Some functions in this module that are not marked as `unsafe` may actually
-//! be unsafe. (FIXME)
-
-#![allow(clippy::not_unsafe_ptr_arg_deref)] // TODO: reconsider this.
-
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 use crate::{
@@ -25,7 +20,11 @@ pub struct SharedDataHelper<'data> {
 }
 
 impl<'data> SharedDataHelper<'data> {
-    pub fn try_new(shared_data: &'data SharedData<'static>) -> OfxResult<Self> {
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `shared_data` is valid and the
+    /// data it holds will remain valid for the lifetime of the returned value.
+    pub unsafe fn try_new(shared_data: &'data SharedData<'static>) -> OfxResult<Self> {
         Ok(Self { shared_data })
     }
 
@@ -51,6 +50,8 @@ impl<'data> SharedDataHelper<'data> {
 
     /// ## Safety
     ///
+    /// The caller must ensure that the input `effect` is valid.
+    ///
     /// The caller must ensure that the type `T` is correct.
     pub unsafe fn get_instance_data<T>(&self, effect: OfxImageEffectHandle) -> OfxResult<&T> {
         let instance_props = self.make_property_set_helper_for_image_effect(effect)?;
@@ -61,7 +62,11 @@ impl<'data> SharedDataHelper<'data> {
         Ok(unsafe { &*(instance_data_ptr as *const T) })
     }
 
-    pub fn make_property_set_helper_for_image_effect(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `effect` is valid, and will remain
+    /// valid for the lifetime of the returned value.
+    pub unsafe fn make_property_set_helper_for_image_effect(
         &self,
         handle: OfxImageEffectHandle,
     ) -> OfxResult<PropertySetHelper<'data>> {
@@ -73,10 +78,14 @@ impl<'data> SharedDataHelper<'data> {
     pub fn make_property_set_helper_for_host(&self) -> OfxResult<PropertySetHelper<'data>> {
         let host = self.shared_data.host_struct.host as *const _ as *mut _;
 
-        Ok(self.property_suite_helper().make_property_set_helper(host))
+        Ok(unsafe { self.property_suite_helper().make_property_set_helper(host) })
     }
 
-    pub fn make_param_set_helper_for_image_effect(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `effect` is valid, and will remain
+    /// valid for the lifetime of the returned value.
+    pub unsafe fn make_param_set_helper_for_image_effect(
         &self,
         handle: OfxImageEffectHandle,
     ) -> OfxResult<ParamSetHelper<'data>> {
@@ -87,11 +96,15 @@ impl<'data> SharedDataHelper<'data> {
             .make_param_set_helper(param_set))
     }
 
-    pub fn make_clip_image_managed(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `clip` is valid, and will remain
+    /// valid for the lifetime of the returned reference.
+    pub unsafe fn make_clip_image_managed(
         &self,
         clip: OfxImageClipHandle,
         time: OfxTime,
-        region: Option<*const OfxRectD>,
+        region: Option<&OfxRectD>,
     ) -> OfxResult<Option<ClipImageManaged<'data>>> {
         let image_handle = self
             .image_effect_suite_helper()
@@ -110,7 +123,11 @@ impl<'data> PropertySuiteHelper<'data> {
         self.property_suite
     }
 
-    pub fn make_property_set_helper(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid, and will remain
+    /// valid for the lifetime of the returned value.
+    pub unsafe fn make_property_set_helper(
         &self,
         handle: OfxPropertySetHandle,
     ) -> PropertySetHelper<'data> {
@@ -122,7 +139,10 @@ impl<'data> PropertySuiteHelper<'data> {
         }
     }
 
-    pub fn prop_set_string(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_set_string(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -137,7 +157,12 @@ impl<'data> PropertySuiteHelper<'data> {
         (unsafe { prop_set_string(handle, property.as_ptr(), index, value.as_ptr()) }).ofx_ok()
     }
 
-    pub fn prop_set_string_n(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    ///
+    /// The caller must ensure that the `values` slice contains valid pointers.
+    pub unsafe fn prop_set_string_n_raw(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -159,7 +184,10 @@ impl<'data> PropertySuiteHelper<'data> {
         .ofx_ok()
     }
 
-    pub fn prop_get_string(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_string(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -181,7 +209,10 @@ impl<'data> PropertySuiteHelper<'data> {
         Ok(Some(value_cstr))
     }
 
-    pub fn prop_set_int(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_set_int(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -196,7 +227,10 @@ impl<'data> PropertySuiteHelper<'data> {
         (unsafe { prop_set_int(handle, property.as_ptr(), index, value) }).ofx_ok()
     }
 
-    pub fn prop_get_int(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_int(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -213,7 +247,10 @@ impl<'data> PropertySuiteHelper<'data> {
         Ok(value)
     }
 
-    pub fn prop_get_int_n(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_int_n(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -235,7 +272,10 @@ impl<'data> PropertySuiteHelper<'data> {
         .ofx_ok()
     }
 
-    pub fn prop_set_double(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_set_double(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -250,7 +290,10 @@ impl<'data> PropertySuiteHelper<'data> {
         (unsafe { prop_set_double(handle, property.as_ptr(), index, value) }).ofx_ok()
     }
 
-    pub fn prop_set_double_n(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_set_double_n(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -272,7 +315,10 @@ impl<'data> PropertySuiteHelper<'data> {
         .ofx_ok()
     }
 
-    pub fn prop_get_double(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_double(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -289,7 +335,10 @@ impl<'data> PropertySuiteHelper<'data> {
         Ok(value)
     }
 
-    pub fn prop_get_double_n(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_double_n(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -311,7 +360,13 @@ impl<'data> PropertySuiteHelper<'data> {
         .ofx_ok()
     }
 
-    pub fn prop_set_pointer(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    ///
+    /// The caller must ensure that `value` remains valid for as long as the
+    /// host retains it, which may be beyond the duration of this call.
+    pub unsafe fn prop_set_pointer(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -326,7 +381,10 @@ impl<'data> PropertySuiteHelper<'data> {
         (unsafe { prop_set_pointer(handle, property.as_ptr(), index, value) }).ofx_ok()
     }
 
-    pub fn prop_get_pointer(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_pointer(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -343,7 +401,10 @@ impl<'data> PropertySuiteHelper<'data> {
         Ok(value_ptr)
     }
 
-    pub fn prop_get_dimension(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn prop_get_dimension(
         &self,
         handle: OfxPropertySetHandle,
         property: &CStr,
@@ -371,73 +432,108 @@ impl<'data> PropertySetHelper<'data> {
     }
 
     pub fn prop_set_string(&self, property: &CStr, index: c_int, value: &CStr) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_set_string(self.props, property, index, value)
+        unsafe {
+            self.property_suite_helper
+                .prop_set_string(self.props, property, index, value)
+        }
     }
 
-    pub fn prop_set_string_n(&self, property: &CStr, values: &[*const c_char]) -> OfxResult<()> {
+    /// ## Safety
+    ///
+    /// The caller must ensure that the `values` slice contains valid pointers.
+    pub unsafe fn prop_set_string_n_raw(
+        &self,
+        property: &CStr,
+        values: &[*const c_char],
+    ) -> OfxResult<()> {
         self.property_suite_helper
-            .prop_set_string_n(self.props, property, values)
+            .prop_set_string_n_raw(self.props, property, values)
     }
 
     pub fn prop_get_string(&self, property: &CStr, index: c_int) -> OfxResult<Option<&CStr>> {
-        self.property_suite_helper
-            .prop_get_string(self.props, property, index)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_string(self.props, property, index)
+        }
     }
 
     pub fn prop_set_int(&self, property: &CStr, index: c_int, value: c_int) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_set_int(self.props, property, index, value)
+        unsafe {
+            self.property_suite_helper
+                .prop_set_int(self.props, property, index, value)
+        }
     }
 
     pub fn prop_get_int(&self, property: &CStr, index: c_int) -> OfxResult<c_int> {
-        self.property_suite_helper
-            .prop_get_int(self.props, property, index)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_int(self.props, property, index)
+        }
     }
 
     pub fn prop_get_int_n(&self, property: &CStr, values: &mut [c_int]) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_get_int_n(self.props, property, values)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_int_n(self.props, property, values)
+        }
     }
 
     pub fn prop_set_double(&self, property: &CStr, index: c_int, value: f64) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_set_double(self.props, property, index, value)
+        unsafe {
+            self.property_suite_helper
+                .prop_set_double(self.props, property, index, value)
+        }
     }
 
     pub fn prop_set_double_n(&self, property: &CStr, values: &[f64]) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_set_double_n(self.props, property, values)
+        unsafe {
+            self.property_suite_helper
+                .prop_set_double_n(self.props, property, values)
+        }
     }
 
     pub fn prop_get_double(&self, property: &CStr, index: c_int) -> OfxResult<f64> {
-        self.property_suite_helper
-            .prop_get_double(self.props, property, index)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_double(self.props, property, index)
+        }
     }
 
     pub fn prop_get_double_n(&self, property: &CStr, values: &mut [f64]) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_get_double_n(self.props, property, values)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_double_n(self.props, property, values)
+        }
     }
 
-    pub fn prop_set_pointer(
+    /// ## Safety
+    ///
+    /// The caller must ensure that `value` remains valid for as long as the
+    /// host retains it, which may be beyond the duration of this call.
+    pub unsafe fn prop_set_pointer(
         &self,
         property: &CStr,
         index: c_int,
         value: *mut c_void,
     ) -> OfxResult<()> {
-        self.property_suite_helper
-            .prop_set_pointer(self.props, property, index, value)
+        unsafe {
+            self.property_suite_helper
+                .prop_set_pointer(self.props, property, index, value)
+        }
     }
 
     pub fn prop_get_pointer(&self, property: &CStr, index: c_int) -> OfxResult<*mut c_void> {
-        self.property_suite_helper
-            .prop_get_pointer(self.props, property, index)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_pointer(self.props, property, index)
+        }
     }
 
     pub fn prop_get_dimension(&self, property: &CStr) -> OfxResult<c_int> {
-        self.property_suite_helper
-            .prop_get_dimension(self.props, property)
+        unsafe {
+            self.property_suite_helper
+                .prop_get_dimension(self.props, property)
+        }
     }
 }
 
@@ -450,7 +546,13 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         self.image_effect_suite
     }
 
-    fn get_property_set(&self, handle: OfxImageEffectHandle) -> OfxResult<OfxPropertySetHandle> {
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    unsafe fn get_property_set(
+        &self,
+        handle: OfxImageEffectHandle,
+    ) -> OfxResult<OfxPropertySetHandle> {
         let get_property_set = self
             .image_effect_suite
             .getPropertySet
@@ -462,7 +564,10 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         Ok(props as OfxPropertySetHandle)
     }
 
-    pub fn clip_define(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn clip_define(
         &self,
         image_effect: OfxImageEffectHandle,
         name: &CStr,
@@ -478,7 +583,10 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         Ok(props)
     }
 
-    pub fn clip_get_handle(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `image_effect` is valid.
+    pub unsafe fn clip_get_handle(
         &self,
         image_effect: OfxImageEffectHandle,
         name: &CStr,
@@ -495,12 +603,16 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         Ok(clip)
     }
 
-    /// Use [`Self::clip_get_image_managed`].
-    pub fn clip_get_image(
+    /// Use [`SharedDataHelper::make_clip_image_managed`].
+    ///
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `clip` is valid.
+    pub unsafe fn clip_get_image(
         &self,
         clip: OfxImageClipHandle,
         time: OfxTime,
-        region: Option<*const OfxRectD>,
+        region: Option<&OfxRectD>,
     ) -> OfxResult<OfxPropertySetHandle> {
         let clip_get_image = self
             .image_effect_suite
@@ -508,15 +620,28 @@ impl<'data> ImageEffectSuiteHelper<'data> {
             .ok_or(OfxStat::kOfxStatErrMissingHostFeature)?;
 
         let mut image: OfxPropertySetHandle = std::ptr::null_mut();
-        (unsafe { clip_get_image(clip, time, region.unwrap_or(std::ptr::null()), &mut image) })
-            .ofx_ok()?;
+        (unsafe {
+            clip_get_image(
+                clip,
+                time,
+                region.map_or(std::ptr::null(), |r| r as *const OfxRectD),
+                &mut image,
+            )
+        })
+        .ofx_ok()?;
 
         Ok(image)
     }
 
-    /// Use [`Self::clip_get_image_managed`] to get a managed image that does
-    /// not require calling this function manually to release it.
-    pub fn clip_release_image_(&self, image_handle: OfxPropertySetHandle) -> OfxResult<()> {
+    /// Use [`SharedDataHelper::make_clip_image_managed`] to get a managed image
+    /// that does not require calling this function manually to release it.
+    ///
+    /// ## Safety
+    ///
+    /// The caller must ensure that `image_handle` is a valid image handle that
+    /// has not been released yet, and that the image is not used after this
+    /// call.
+    pub unsafe fn clip_release_image(&self, image_handle: OfxPropertySetHandle) -> OfxResult<()> {
         let clip_release_image = self
             .image_effect_suite
             .clipReleaseImage
@@ -525,7 +650,10 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         (unsafe { clip_release_image(image_handle) }).ofx_ok()
     }
 
-    pub fn get_param_set(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `image_effect` is valid.
+    pub unsafe fn get_param_set(
         &self,
         image_effect: OfxImageEffectHandle,
     ) -> OfxResult<OfxParamSetHandle> {
@@ -540,7 +668,10 @@ impl<'data> ImageEffectSuiteHelper<'data> {
         Ok(param_set)
     }
 
-    pub fn clip_get_region_of_definition(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `clip` is valid.
+    pub unsafe fn clip_get_region_of_definition(
         &self,
         clip: OfxImageClipHandle,
         time: OfxTime,
@@ -583,7 +714,10 @@ pub enum BitDepth {
 }
 
 impl<'data> ClipImageManaged<'data> {
-    fn try_new(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `image_handle` is valid.
+    unsafe fn try_new(
         shared_data_helper: &SharedDataHelper<'data>,
         image_handle: OfxPropertySetHandle,
     ) -> OfxResult<Option<Self>> {
@@ -692,9 +826,10 @@ impl<'data> ClipImageManaged<'data> {
 
 impl<'data> Drop for ClipImageManaged<'data> {
     fn drop(&mut self) {
-        let _ = self
-            .image_effect_suite_helper
-            .clip_release_image_(self.image_handle);
+        let _ = unsafe {
+            self.image_effect_suite_helper
+                .clip_release_image(self.image_handle)
+        };
     }
 }
 
@@ -707,7 +842,10 @@ impl<'data> ParameterSuiteHelper<'data> {
         self.parameter_suite
     }
 
-    pub fn make_param_set_helper(&self, handle: OfxParamSetHandle) -> ParamSetHelper<'data> {
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `handle` is valid.
+    pub unsafe fn make_param_set_helper(&self, handle: OfxParamSetHandle) -> ParamSetHelper<'data> {
         ParamSetHelper {
             parameter_suite_helper: ParameterSuiteHelper {
                 parameter_suite: self.parameter_suite,
@@ -716,7 +854,10 @@ impl<'data> ParameterSuiteHelper<'data> {
         }
     }
 
-    pub fn param_define(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `param_set` is valid.
+    pub unsafe fn param_define(
         &self,
         param_set: OfxParamSetHandle,
         param_type: &CStr,
@@ -734,7 +875,10 @@ impl<'data> ParameterSuiteHelper<'data> {
         Ok(props)
     }
 
-    pub fn param_get_handle(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `param_set` is valid.
+    pub unsafe fn param_get_handle(
         &self,
         param_set: OfxParamSetHandle,
         name: &CStr,
@@ -753,8 +897,8 @@ impl<'data> ParameterSuiteHelper<'data> {
 
     /// ## Safety
     ///
-    /// TODO
-    fn param_get_value_at_time<T>(
+    /// The caller must ensure that the input `param_handle` is valid.
+    unsafe fn param_get_value_at_time<T>(
         &self,
         param_handle: OfxParamHandle,
         time: OfxTime,
@@ -764,7 +908,10 @@ impl<'data> ParameterSuiteHelper<'data> {
         Ok(value)
     }
 
-    pub fn param_get_value_at_time_double(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `param_handle` is valid.
+    pub unsafe fn param_get_value_at_time_double(
         &self,
         param_handle: OfxParamHandle,
         time: OfxTime,
@@ -772,7 +919,10 @@ impl<'data> ParameterSuiteHelper<'data> {
         self.param_get_value_at_time(param_handle, time)
     }
 
-    pub fn param_get_value_at_time_int(
+    /// ## Safety
+    ///
+    /// The caller must ensure that the input `param_handle` is valid.
+    pub unsafe fn param_get_value_at_time_int(
         &self,
         param_handle: OfxParamHandle,
         time: OfxTime,
@@ -811,12 +961,16 @@ impl<'data> ParamSetHelper<'data> {
     }
 
     pub fn param_define(&self, param_type: &CStr, name: &CStr) -> OfxResult<OfxPropertySetHandle> {
-        self.parameter_suite_helper
-            .param_define(self.param_set, param_type, name)
+        unsafe {
+            self.parameter_suite_helper
+                .param_define(self.param_set, param_type, name)
+        }
     }
 
     pub fn param_get_handle(&self, name: &CStr) -> OfxResult<OfxParamHandle> {
-        self.parameter_suite_helper
-            .param_get_handle(self.param_set, name)
+        unsafe {
+            self.parameter_suite_helper
+                .param_get_handle(self.param_set, name)
+        }
     }
 }

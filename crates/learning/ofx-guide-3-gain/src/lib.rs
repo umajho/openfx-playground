@@ -170,9 +170,9 @@ fn action_unload() -> OfxResult<()> {
 
 fn action_describe(descriptor: OfxImageEffectHandle) -> OfxResult<()> {
     let data = shared_data_lockless()?;
-    let data = SharedDataHelper::try_new(&data)?;
+    let data = unsafe { SharedDataHelper::try_new(&data) }?;
 
-    let descriptor = data.make_property_set_helper_for_image_effect(descriptor)?;
+    let descriptor = unsafe { data.make_property_set_helper_for_image_effect(descriptor) }?;
 
     descriptor.prop_set_string(kOfxPropLabel, 0, c"OFX Gain Example")?;
     descriptor.prop_set_string(kOfxImageEffectPluginPropGrouping, 0, c"OFX Example")?;
@@ -204,12 +204,12 @@ fn action_describe_in_context(
     in_args: OfxPropertySetHandle,
 ) -> OfxResult<()> {
     let data = shared_data_lockless()?;
-    let data = SharedDataHelper::try_new(&data)?;
+    let data = unsafe { SharedDataHelper::try_new(&data) }?;
 
     let s_prop = data.property_suite_helper();
     let s_ifx = data.image_effect_suite_helper();
 
-    let in_args = s_prop.make_property_set_helper(in_args);
+    let in_args = unsafe { s_prop.make_property_set_helper(in_args) };
 
     let context = in_args.prop_get_string(kOfxImageEffectPropContext, 0)?;
     if context != Some(kOfxImageEffectContextFilter) {
@@ -217,8 +217,8 @@ fn action_describe_in_context(
     }
 
     for name in [c"Output", c"Source"] {
-        let props = s_ifx.clip_define(descriptor, name)?;
-        let props = s_prop.make_property_set_helper(props);
+        let props = unsafe { s_ifx.clip_define(descriptor, name) }?;
+        let props = unsafe { s_prop.make_property_set_helper(props) };
 
         for (i, comp) in [
             kOfxImageComponentRGBA,
@@ -232,11 +232,11 @@ fn action_describe_in_context(
         }
     }
 
-    let param_set = data.make_param_set_helper_for_image_effect(descriptor)?;
+    let param_set = unsafe { data.make_param_set_helper_for_image_effect(descriptor) }?;
 
     {
         let param_props = param_set.param_define(kOfxParamTypeDouble, GAIN_PARAM_NAME)?;
-        let param_props = s_prop.make_property_set_helper(param_props);
+        let param_props = unsafe { s_prop.make_property_set_helper(param_props) };
         param_props.prop_set_string(kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeScale)?;
         param_props.prop_set_double(kOfxParamPropDefault, 0, 1.0)?;
         param_props.prop_set_double(kOfxParamPropMin, 0, 0.0)?;
@@ -249,7 +249,7 @@ fn action_describe_in_context(
     {
         let param_props =
             param_set.param_define(kOfxParamTypeBoolean, APPLY_TO_ALPHA_PARAM_NAME)?;
-        let param_props = s_prop.make_property_set_helper(param_props);
+        let param_props = unsafe { s_prop.make_property_set_helper(param_props) };
         param_props.prop_set_int(kOfxParamPropDefault, 0, 0)?;
         param_props.prop_set_string(kOfxPropLabel, 0, c"Apply To Alpha")?;
         param_props.prop_set_string(
@@ -264,16 +264,16 @@ fn action_describe_in_context(
 
 fn action_create_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
-    let data = SharedDataHelper::try_new(&data)?;
+    let data = unsafe { SharedDataHelper::try_new(&data) }?;
 
     let s_ifx = data.image_effect_suite_helper();
 
-    let instance_props = data.make_property_set_helper_for_image_effect(instance)?;
+    let instance_props = unsafe { data.make_property_set_helper_for_image_effect(instance) }?;
 
-    let source_clip = s_ifx.clip_get_handle(instance, c"Source")?;
-    let output_clip = s_ifx.clip_get_handle(instance, c"Output")?;
+    let source_clip = unsafe { s_ifx.clip_get_handle(instance, c"Source") }?;
+    let output_clip = unsafe { s_ifx.clip_get_handle(instance, c"Output") }?;
 
-    let param_set = data.make_param_set_helper_for_image_effect(instance)?;
+    let param_set = unsafe { data.make_param_set_helper_for_image_effect(instance) }?;
     let gain_param = param_set.param_get_handle(GAIN_PARAM_NAME)?;
     let apply_to_alpha_param = param_set.param_get_handle(APPLY_TO_ALPHA_PARAM_NAME)?;
 
@@ -285,7 +285,9 @@ fn action_create_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatu
     };
     let my_data_ptr = Box::into_raw(Box::new(my_data)) as *mut c_void;
 
-    match instance_props.prop_set_pointer(kOfxPropInstanceData, 0, my_data_ptr) {
+    // SAFETY: the pointee is kept alive by `Box::into_raw` until it is
+    // reclaimed with `Box::from_raw` in `action_destroy_instance`.
+    match unsafe { instance_props.prop_set_pointer(kOfxPropInstanceData, 0, my_data_ptr) } {
         Ok(_) => Ok(()),
         Err(err) => {
             drop(unsafe { Box::from_raw(my_data_ptr as *mut MyInstanceData) });
@@ -296,9 +298,9 @@ fn action_create_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatu
 
 fn action_destroy_instance(instance: OfxImageEffectHandle) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
-    let data = SharedDataHelper::try_new(&data)?;
+    let data = unsafe { SharedDataHelper::try_new(&data) }?;
 
-    let instance_props = data.make_property_set_helper_for_image_effect(instance)?;
+    let instance_props = unsafe { data.make_property_set_helper_for_image_effect(instance) }?;
     let my_data_ptr = instance_props.prop_get_pointer(kOfxPropInstanceData, 0)?;
     if my_data_ptr.is_null() {
         return Err(OfxStat::kOfxStatErrFatal);
@@ -315,23 +317,23 @@ fn action_is_identity(
     out_args: OfxPropertySetHandle,
 ) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
-    let data = SharedDataHelper::try_new(&data)?;
+    let data = unsafe { SharedDataHelper::try_new(&data) }?;
 
     let s_prop = data.property_suite_helper();
     let s_param = data.parameter_suite_helper();
 
-    let instance_props = data.make_property_set_helper_for_image_effect(effect)?;
+    let instance_props = unsafe { data.make_property_set_helper_for_image_effect(effect) }?;
     let my_data_ptr = instance_props.prop_get_pointer(kOfxPropInstanceData, 0)?;
     if my_data_ptr.is_null() {
         return Err(OfxStat::kOfxStatErrFatal);
     }
     let my_data = unsafe { &*(my_data_ptr as *const MyInstanceData) };
 
-    let in_args = s_prop.make_property_set_helper(in_args);
-    let out_args = s_prop.make_property_set_helper(out_args);
+    let in_args = unsafe { s_prop.make_property_set_helper(in_args) };
+    let out_args = unsafe { s_prop.make_property_set_helper(out_args) };
 
     let time = in_args.prop_get_double(kOfxPropTime, 0)?;
-    let gain = s_param.param_get_value_at_time_double(my_data.gain_param, time)?;
+    let gain = unsafe { s_param.param_get_value_at_time_double(my_data.gain_param, time) }?;
 
     if (gain - 1.0).abs() < 0.000000001 {
         out_args.prop_set_string(kOfxPropName, 0, c"Source")?;
@@ -347,12 +349,12 @@ fn action_render(
     _out_args: OfxPropertySetHandle,
 ) -> Result<(), OfxStatus> {
     let data = shared_data_lockless()?;
-    let data = SharedDataHelper::try_new(&data)?;
+    let data = unsafe { SharedDataHelper::try_new(&data) }?;
 
     let s_prop = data.property_suite_helper();
     let s_param = data.parameter_suite_helper();
 
-    let in_args = s_prop.make_property_set_helper(in_args);
+    let in_args = unsafe { s_prop.make_property_set_helper(in_args) };
 
     let time: OfxTime = in_args.prop_get_double(kOfxPropTime, 0)?;
     let render_window = {
@@ -361,21 +363,25 @@ fn action_render(
         rect_i_from_array(&render_window)
     };
 
-    let instance_props = data.make_property_set_helper_for_image_effect(instance)?;
+    let instance_props = unsafe { data.make_property_set_helper_for_image_effect(instance) }?;
     let my_data_ptr = instance_props.prop_get_pointer(kOfxPropInstanceData, 0)?;
     if my_data_ptr.is_null() {
         return Err(OfxStat::kOfxStatErrFatal);
     }
     let my_data = unsafe { &*(my_data_ptr as *const MyInstanceData) };
 
-    let gain = s_param.param_get_value_at_time_double(my_data.gain_param, time)?;
+    let gain = unsafe { s_param.param_get_value_at_time_double(my_data.gain_param, time) }?;
     let apply_to_alpha =
-        s_param.param_get_value_at_time_int(my_data.apply_to_alpha_param, time)? != 0;
+        unsafe { s_param.param_get_value_at_time_int(my_data.apply_to_alpha_param, time) }? != 0;
 
-    let Some(output_img_m) = data.make_clip_image_managed(my_data.output_clip, time, None)? else {
+    let Some(output_img_m) =
+        unsafe { data.make_clip_image_managed(my_data.output_clip, time, None) }?
+    else {
         return Err(OfxStat::kOfxStatFailed);
     };
-    let Some(source_img_m) = data.make_clip_image_managed(my_data.source_clip, time, None)? else {
+    let Some(source_img_m) =
+        unsafe { data.make_clip_image_managed(my_data.source_clip, time, None) }?
+    else {
         return Err(OfxStat::kOfxStatFailed);
     };
 
@@ -390,7 +396,7 @@ fn action_render(
     ) -> OfxResult<()> {
         let s_prop = data.property_suite_helper();
 
-        let output_img = s_prop.make_property_set_helper(output_img);
+        let output_img = unsafe { s_prop.make_property_set_helper(output_img) };
 
         let components = output_img.prop_get_string(kOfxImageEffectPropComponents, 0)?;
         let n_comps = match components {

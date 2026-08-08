@@ -7,6 +7,4 @@ The contents of this folder were originally taken from the
 
 ---
 
-Functions in `helpers` that are not marked as `unsafe` may actually be unsafe.
-
-Keep `publish = false` for obvious reasons (e.g., the issue mentioned above).
+For now, considering the immaturity, keep `publish = false`.
