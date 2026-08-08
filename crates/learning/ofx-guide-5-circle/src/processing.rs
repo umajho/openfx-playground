@@ -26,7 +26,12 @@ where
 {
     let par = output_img.pixel_aspect_ratio();
 
-    let colour_quantised = colour.map(|c| clamp(from_f64(c * into_f64(max)), T::default(), max));
+    let colour_quantised = if into_f64(max) == 1.0 {
+        // don't clamp floating point values
+        colour.map(from_f64)
+    } else {
+        colour.map(|c| clamp(from_f64(c * into_f64(max)), T::default(), max))
+    };
 
     for y in render_window.y1..render_window.y2 {
         if y % 20 == 0
@@ -61,8 +66,8 @@ where
                 alpha = 0.0;
             }
 
-            let src_pix = source_img.raw_address(x, y).map(|ptr| ptr as *mut T);
-            fn comp<T>(pix: Option<*mut T>, i: usize) -> T
+            let src_pix = source_img.raw_address(x, y).map(|ptr| ptr as *const T);
+            fn comp<T>(pix: Option<*const T>, i: usize) -> T
             where
                 T: Copy + Default,
             {

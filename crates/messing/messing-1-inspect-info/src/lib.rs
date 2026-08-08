@@ -1,6 +1,6 @@
 //! ## TODO
 //!
-//! - [ ] initialzing tracing subscriber (The fact that this is a dynamic
+//! - [ ] initializing tracing subscriber (The fact that this is a dynamic
 //!   library should be taken into account.)
 //!
 //! ## FIXME

@@ -1,6 +1,6 @@
 //! ## TODO
 //!
-//! - [ ] initialzing tracing subscriber (The fact that this is a dynamic
+//! - [ ] initializing tracing subscriber (The fact that this is a dynamic
 //!   library should be taken into account.)
 
 mod processing;
@@ -16,20 +16,21 @@ use openfx_bindings::{
         OfxPropertySetHandle, OfxRectI, OfxResult, OfxStat, OfxStatus, OfxTime,
         kOfxActionCreateInstance, kOfxActionDescribe, kOfxActionDestroyInstance, kOfxActionLoad,
         kOfxActionUnload, kOfxBitDepthByte, kOfxBitDepthFloat, kOfxBitDepthShort,
-        kOfxImageComponentRGB, kOfxImageComponentRGBA, kOfxImageEffectActionDescribeInContext,
-        kOfxImageEffectActionGetRegionOfDefinition, kOfxImageEffectActionIsIdentity,
-        kOfxImageEffectActionRender, kOfxImageEffectContextFilter, kOfxImageEffectPluginApi,
-        kOfxImageEffectPluginPropGrouping, kOfxImageEffectPluginPropHostFrameThreading,
-        kOfxImageEffectPluginRenderThreadSafety, kOfxImageEffectPropContext,
-        kOfxImageEffectPropRegionOfDefinition, kOfxImageEffectPropRenderScale,
-        kOfxImageEffectPropRenderWindow, kOfxImageEffectPropSupportedComponents,
-        kOfxImageEffectPropSupportedContexts, kOfxImageEffectPropSupportedPixelDepths,
-        kOfxImageEffectPropSupportsMultiResolution, kOfxImageEffectRenderFullySafe,
-        kOfxParamCoordinatesNormalised, kOfxParamDoubleTypeX, kOfxParamDoubleTypeXYAbsolute,
-        kOfxParamPropDefault, kOfxParamPropDefaultCoordinateSystem, kOfxParamPropDisplayMax,
-        kOfxParamPropDisplayMin, kOfxParamPropDoubleType, kOfxParamPropHint, kOfxParamPropMin,
-        kOfxParamTypeBoolean, kOfxParamTypeDouble, kOfxParamTypeDouble2D, kOfxParamTypeRGBA,
-        kOfxPropAPIVersion, kOfxPropInstanceData, kOfxPropLabel, kOfxPropName, kOfxPropTime,
+        kOfxImageComponentAlpha, kOfxImageComponentRGB, kOfxImageComponentRGBA,
+        kOfxImageEffectActionDescribeInContext, kOfxImageEffectActionGetRegionOfDefinition,
+        kOfxImageEffectActionIsIdentity, kOfxImageEffectActionRender, kOfxImageEffectContextFilter,
+        kOfxImageEffectPluginApi, kOfxImageEffectPluginPropGrouping,
+        kOfxImageEffectPluginPropHostFrameThreading, kOfxImageEffectPluginRenderThreadSafety,
+        kOfxImageEffectPropContext, kOfxImageEffectPropRegionOfDefinition,
+        kOfxImageEffectPropRenderScale, kOfxImageEffectPropRenderWindow,
+        kOfxImageEffectPropSupportedComponents, kOfxImageEffectPropSupportedContexts,
+        kOfxImageEffectPropSupportedPixelDepths, kOfxImageEffectPropSupportsMultiResolution,
+        kOfxImageEffectRenderFullySafe, kOfxParamCoordinatesNormalised, kOfxParamDoubleTypeX,
+        kOfxParamDoubleTypeXYAbsolute, kOfxParamPropDefault, kOfxParamPropDefaultCoordinateSystem,
+        kOfxParamPropDisplayMax, kOfxParamPropDisplayMin, kOfxParamPropDoubleType,
+        kOfxParamPropHint, kOfxParamPropMin, kOfxParamTypeBoolean, kOfxParamTypeDouble,
+        kOfxParamTypeDouble2D, kOfxParamTypeRGBA, kOfxPropAPIVersion, kOfxPropInstanceData,
+        kOfxPropLabel, kOfxPropName, kOfxPropTime,
     },
     helpers::{
         SaferHostStruct, SharedData,
@@ -279,6 +280,7 @@ fn action_describe_in_context(
             kOfxImageEffectPropSupportedComponents,
             &[
                 kOfxImageComponentRGBA.as_ptr(),
+                kOfxImageComponentAlpha.as_ptr(),
                 kOfxImageComponentRGB.as_ptr(),
             ],
         )?;
